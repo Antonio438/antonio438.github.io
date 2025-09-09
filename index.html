@@ -5,24 +5,22 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>e-Licitações cmeg</title>
     
-    <!-- CORREÇÃO: Apontando para 'styles.css' (com 's') -->
     <link rel="stylesheet" href="styles.css">
-    
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
-
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <script src="script.js" defer></script>
 </head>
 <body class="theme-dark">
 
     <div class="app-container">
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header"><i class="fas fa-gavel sidebar-logo"></i><span class="sidebar-title">e-Licitações</span></div>
-           <nav class="sidebar-nav">
+            <nav class="sidebar-nav">
                 <a href="#dashboards" class="nav-item active" data-section="dashboards"><i class="fas fa-chart-pie"></i>Dashboards</a>
                 <a href="#processes" class="nav-item" data-section="processes"><i class="fas fa-list-check"></i>Processos</a>
                 <a href="#contract-plan" class="nav-item" data-section="contract-plan"><i class="fas fa-file-contract"></i>Plano de Contratação</a>
@@ -678,8 +676,6 @@
     </div>
 
     <button id="back-to-top-btn" title="Voltar ao topo"><i class="fas fa-arrow-up"></i></button>
-
-    <script src="script.js" defer></script>
 
 </body>
 </html>

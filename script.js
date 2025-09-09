@@ -1,7 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
 
     // CORRIGIDO: Apontar para os ficheiros JSON locais no seu repositório.
-    const PLAN_API_URL = './database.json'; // Assumindo que este é o seu ficheiro do plano.
+    const PLAN_API_URL = './plano.json'; // Assumindo que este é o seu ficheiro do plano.
     const PROCESSES_API_URL = './processos.json';
     const UPLOADS_BASE_URL = './uploads'; // ATENÇÃO: Crie uma pasta 'uploads' e coloque os seus anexos nela.
     
@@ -2258,3 +2258,4 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
     initializeDraggableCards();
 });
+

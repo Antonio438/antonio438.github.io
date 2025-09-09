@@ -1,6 +1,7 @@
-{
-  "processes": [
-    {
+[
+  
+  {
+    
       "id": 1,
       "object": "Contratação de serviço de desinsetização e desratização",
       "value": 16000,
@@ -690,4 +691,3 @@
       }
     }
   ]
-}

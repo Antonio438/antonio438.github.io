@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const PLAN_API_URL = './database.json'; // Assumindo que este é o seu ficheiro do plano.
     const PROCESSES_API_URL = './processos.json';
     const UPLOADS_BASE_URL = './uploads'; // ATENÇÃO: Crie uma pasta 'uploads' e coloque os seus anexos nela.
-
+    
     // =================================================================================
     // STATE & CONSTANTS
     // =================================================================================
@@ -52,7 +52,6 @@ document.addEventListener('DOMContentLoaded', () => {
     // =================================================================================
     const fetchPlan = async () => {
         try {
-            // CORRIGIDO: A lógica de fetch agora lê o ficheiro JSON local.
             const response = await fetch(PLAN_API_URL);
             if (!response.ok) throw new Error('Erro ao buscar plano anual (database.json).');
             planData = await response.json();
@@ -69,7 +68,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const fetchProcesses = async () => {
         try {
-            // CORRIGIDO: A lógica de fetch agora lê o ficheiro JSON local.
             const response = await fetch(PROCESSES_API_URL);
             if (!response.ok) throw new Error('Erro ao buscar processos (processos.json).');
             processesData = await response.json();
@@ -79,7 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // CORRIGIDO: Funções de escrita agora mostram um alerta, pois não funcionam em modo estático.
     const addProcess = async (data) => {
         showToast('ERRO: Não é possível adicionar processos em modo de visualização.');
         console.error('Operação não permitida: A função de adicionar necessita de um servidor back-end.');
@@ -104,11 +101,465 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // =================================================================================
     // RENDER FUNCTIONS
-    // ... (O resto do seu código pode continuar exatamente como está, exceto por uma pequena correção) ...
     // =================================================================================
+    function renderProcessDashboard() {
+        destroyChart('statusChart');
+        destroyChart('valueByMonthChart');
+        
+        document.getElementById('stat-active').textContent = processesData.length;
+        document.getElementById('stat-upcoming').textContent = processesData.filter(p => p.fase === 'Em Licitação').length;
+        
+        const contractedCount = processesData.filter(p => p.fase === 'Contratado').length;
+        document.getElementById('stat-value').textContent = contractedCount;
+        document.querySelector('[data-card-id="contratados"] .stat-title').textContent = 'Contratados';
+        document.querySelector('[data-card-id="contratados"] .stat-change').textContent = 'Total de processos contratados';
+        document.querySelector('[data-card-id="contratados"]').dataset.filterStatus = 'Contratado';
+
+        document.getElementById('stat-overdue').textContent = processesData.filter(p => p.fase === 'Planejamento' || p.fase === 'Em Licitação').length;
+        
+        const statusCounts = PROCESS_PHASES.reduce((acc, phase) => {
+            acc[phase] = processesData.filter(p => p.fase === phase).length;
+            return acc;
+        }, {});
+
+        chartInstances['statusChart'] = new Chart(document.getElementById('statusChart').getContext('2d'), {
+            type: 'doughnut', data: { labels: Object.keys(statusCounts), datasets: [{ data: Object.values(statusCounts), backgroundColor: CHART_COLORS, borderColor: 'var(--card-bg)', borderWidth: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-secondary)' } } } }
+        });
+
+        const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+        const planValueByMonth = Array(12).fill(0);
+        planData.forEach(p => {
+            if (p.deadline) {
+                const month = new Date(p.deadline + 'T00:00:00').getMonth();
+                planValueByMonth[month] += p.value;
+            }
+        });
+
+        const contractedValueByMonth = Array(12).fill(0);
+        processesData
+            .filter(p => p.fase === 'Contratado' && p.purchasedValue && p.contractDate)
+            .forEach(p => {
+                const month = new Date(p.contractDate + 'T00:00:00').getMonth();
+                if(month >= 0 && month < 12) {
+                    contractedValueByMonth[month] += parseFloat(p.purchasedValue);
+                }
+            });
+
+        chartInstances['valueByMonthChart'] = new Chart(document.getElementById('valueByMonthChart').getContext('2d'), {
+            type: 'bar',
+            data: {
+                labels: months,
+                datasets: [{
+                    label: 'Valor Planejado',
+                    data: planValueByMonth,
+                    backgroundColor: 'rgba(107, 114, 128, 0.7)',
+                    borderRadius: 4
+                }, {
+                    label: 'Valor Contratado',
+                    data: contractedValueByMonth,
+                    backgroundColor: CHART_COLORS[2],
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                plugins: {
+                    legend: { position: 'top', labels: { color: 'var(--text-secondary)' } },
+                    tooltip: {
+                        callbacks: {
+                            label: (context) => `${context.dataset.label}: ${context.parsed.y.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}`
+                        }
+                    }
+                },
+                scales: {
+                    y: { ticks: { callback: (v) => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), color: 'var(--text-secondary)' }, grid: { color: 'var(--card-border)' } },
+                    x: { ticks: { color: 'var(--text-secondary)' }, grid: { display: false } }
+                }
+            }
+        });
+    }
+
+    function renderPlanDashboard() {
+        destroyChart('planStatusChart');
+        destroyChart('planValueByMonthChart');
+        const totalValue = planData.reduce((sum, item) => sum + item.value, 0);
+        document.getElementById('plan-total-value').textContent = totalValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const initiatedPlanIds = new Set(processesData.map(p => parseInt(p.planId, 10)).filter(id => !isNaN(id)));
+        
+        const contractedPlanIds = new Set(
+            processesData
+                .filter(p => p.planId && p.fase === 'Contratado')
+                .map(p => parseInt(p.planId, 10))
+                .filter(id => !isNaN(id))
+        );
+        
+        const executedValue = processesData
+            .filter(p => p.planId && p.fase === 'Contratado' && p.purchasedValue)
+            .reduce((sum, p) => sum + parseFloat(p.purchasedValue || 0), 0);
+        document.getElementById('plan-executed-value').textContent = executedValue.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const progress = planData.length > 0 ? (initiatedPlanIds.size / planData.length) * 100 : 0;
+        document.getElementById('plan-progress').textContent = `${progress.toFixed(1)}%`;
+        
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const thirtyDaysFromNow = new Date(new Date().setDate(today.getDate() + 30));
+        
+        const upcomingItems = planData.filter(item => {
+            if (!item.deadline) return false;
+            const deadline = new Date(item.deadline + 'T00:00:00');
+            const isWithinWindow = deadline <= thirtyDaysFromNow && deadline >= today;
+            const isNotInitiated = !initiatedPlanIds.has(parseInt(item.id, 10));
+            return isWithinWindow && isNotInitiated;
+        }).length;
+        document.getElementById('plan-upcoming-items').textContent = upcomingItems;
+        
+        const overdueItems = planData.filter(item => {
+            if (!item.deadline) return false;
+            const deadline = new Date(item.deadline + 'T00:00:00');
+            const isOverdue = deadline < today;
+            const isNotContracted = !contractedPlanIds.has(parseInt(item.id, 10));
+            return isOverdue && isNotContracted;
+        }).length;
+        document.getElementById('plan-overdue-items').textContent = overdueItems;
+
+        const planStatusCounts = {
+            "Não Iniciado": planData.filter(item => !initiatedPlanIds.has(parseInt(item.id, 10))).length,
+            "Em Andamento": Array.from(initiatedPlanIds).filter(id => {
+                const process = processesData.find(p => parseInt(p.planId, 10) === id);
+                return process && process.fase !== 'Contratado';
+            }).length,
+            "Executado": contractedPlanIds.size
+        };
+
+        chartInstances['planStatusChart'] = new Chart(document.getElementById('planStatusChart').getContext('2d'), {
+            type: 'pie', data: { labels: Object.keys(planStatusCounts), datasets: [{ data: Object.values(planStatusCounts), backgroundColor: ['#6b7280', CHART_COLORS[0], CHART_COLORS[1]], borderColor: 'var(--card-bg)', borderWidth: 4 }] },
+            options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { position: 'bottom', labels: { color: 'var(--text-secondary)' } } } }
+        });
+
+        const months = ["Jan", "Fev", "Mar", "Abr", "Mai", "Jun", "Jul", "Ago", "Set", "Out", "Nov", "Dez"];
+        const planValueByMonth = Array(12).fill(0);
+        planData.forEach(p => { 
+            if (p.deadline) {
+                const month = new Date(p.deadline + 'T00:00:00').getMonth(); 
+                planValueByMonth[month] += p.value;
+            }
+        });
+
+        chartInstances['planValueByMonthChart'] = new Chart(document.getElementById('planValueByMonthChart').getContext('2d'), {
+            type: 'line', data: { labels: months, datasets: [{ label: 'Valor Planejado', data: planValueByMonth, backgroundColor: 'rgba(90, 103, 216, 0.1)', borderColor: CHART_COLORS[0], tension: 0.3, fill: true }] },
+            options: { responsive: true, maintainAspectRatio: false, animation: false, plugins: { legend: { display: false } }, scales: { y: { ticks: { callback: (v) => new Intl.NumberFormat('pt-BR', { notation: 'compact' }).format(v), color: 'var(--text-secondary)' }, grid: { color: 'var(--card-border)' } }, x: { ticks: { color: 'var(--text-secondary)' }, grid: { display: false } } } }
+        });
+    }
+
+    function populateContractPlanTable(data = planData) {
+        const tableBody = document.getElementById('contract-plan-table').querySelector('tbody');
+        tableBody.innerHTML = '';
+        
+        data.forEach(p => {
+            const row = tableBody.insertRow();
+            const processInfo = processesData.find(process => parseInt(process.planId, 10) === parseInt(p.id, 10));
+            const status = processInfo ? processInfo.fase : "Não Iniciado";
+            
+            const statusHtml = `<td class="editable-cell" data-id="${p.id}" data-field="status">
+                                <span class="process-status status-${status.replace(/ /g, '-')}">${status}</span>
+                              </td>`;
+            
+            const actionHtml = status !== "Não Iniciado" 
+                ? `<button class="btn" disabled style="padding: 0.2rem 0.8rem; font-size: 0.8rem;">Iniciado</button>` 
+                : `<button class="btn btn-primary start-process-btn" data-plan-id="${p.id}" style="padding: 0.2rem 0.8rem; font-size: 0.8rem;"><i class="fas fa-play"></i> Iniciar</button>`;
+
+            row.innerHTML = `
+                <td>${p.id}</td>
+                <td><strong>${p.object.toUpperCase()}</strong></td>
+                <td>${p.value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                <td><span class="card-priority priority-${p.priority}">${p.priority}</span></td>
+                <td>${p.deadline ? new Date(p.deadline + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A'}</td>
+                ${statusHtml}
+                <td>${actionHtml}</td>`;
+        });
+    }
     
-    // COLE TODO O SEU CÓDIGO RESTANTE A PARTIR DAQUI...
-    // ... ATÉ ENCONTRAR A FUNÇÃO openProcessDetailModal ...
+    function populateProcessesTable() {
+        const tableBody = document.getElementById('processes-table').querySelector('tbody');
+        tableBody.innerHTML = '';
+        
+        const filteredAndSortedData = getFilteredData().sort((a, b) => {
+            const aIsImportant = a.isImportant || false;
+            const bIsImportant = b.isImportant || false;
+            if (aIsImportant !== bIsImportant) {
+                return bIsImportant - aIsImportant;
+            }
+            return (a.processNumber || "").localeCompare(b.processNumber || "", undefined, { numeric: true });
+        });
+
+        filteredAndSortedData.forEach(p => {
+            const isImportant = p.isImportant;
+            const importantClass = isImportant ? 'important' : '';
+            const starIcon = isImportant ? 'fas fa-star' : 'far fa-star';
+            const rowClass = isImportant ? 'important-row' : '';
+
+            const row = tableBody.insertRow();
+            row.dataset.processId = p.id;
+            row.className = rowClass;
+            
+            row.innerHTML = `
+                <td><span class="process-number-clickable" data-id="${p.id}">${p.processNumber || ''}</span></td>
+                <td><span class="process-object-clickable" data-id="${p.id}"><strong>${p.object.toUpperCase()}</strong></span></td>
+                <td class="editable-cell" data-id="${p.id}" data-field="fase"><span class="process-status status-${p.fase.replace(/ /g, '-')}">${p.fase}</span></td>
+                <td class="editable-cell" data-id="${p.id}" data-field="modality">${p.modality || 'A definir'}</td>
+                <td class="editable-cell" data-id="${p.id}" data-field="location">${p.location.sector}</td>
+                <td class="actions-cell">
+                    <button class="btn-action-icon btn-importante ${importantClass}" data-id="${p.id}" data-tooltip="Marcar/Desmarcar Importante">
+                        <i class="${starIcon}"></i>
+                    </button>
+                    <button class="btn-action-icon btn-alterar" data-id="${p.id}" data-tooltip="Alterar"><i class="fas fa-pencil-alt"></i></button>
+                    <button class="btn-action-icon btn-excluir" data-id="${p.id}" data-tooltip="Excluir">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+                </td>`;
+        });
+    }
+
+    function getFilteredAnalyticsData() {
+        const selectedMonth = document.getElementById('filter-analytics-month').value;
+        const selectedType = document.getElementById('filter-analytics-type').value;
+        const selectedModality = document.getElementById('filter-analytics-modality').value;
+
+        const contractedProcesses = processesData
+            .filter(p => p.fase === 'Contratado' && p.purchasedValue && p.contractDate);
+
+        const analyticsData = contractedProcesses.map(p => {
+            let estimatedValue = p.value;
+            if (p.planId) {
+                const planItem = planData.find(item => parseInt(item.id, 10) === parseInt(p.planId, 10));
+                if (planItem) {
+                    estimatedValue = planItem.value;
+                }
+            }
+            return { ...p, estimatedValue };
+        });
+
+        return analyticsData.filter(p => {
+            const monthMatch = selectedMonth ? new Date(p.contractDate + 'T00:00:00').getMonth() == selectedMonth : true;
+            const typeMatch = selectedType ? p.type === selectedType : true;
+            const modalityMatch = selectedModality ? p.modality === selectedModality : true;
+            return monthMatch && typeMatch && modalityMatch;
+        });
+    }
+
+    function renderAnalyticsDashboard() {
+        const filteredData = getFilteredAnalyticsData();
+        
+        const totalEconomy = filteredData.reduce((acc, p) => acc + (parseFloat(p.estimatedValue || 0) - parseFloat(p.purchasedValue || 0)), 0);
+        const totalEstimated = filteredData.reduce((acc, p) => acc + parseFloat(p.estimatedValue || 0), 0);
+        const economyPercentage = totalEstimated > 0 ? (totalEconomy / totalEstimated) * 100 : 0;
+        
+        const onTimeProcesses = filteredData.filter(p => {
+            if (!p.contractDate || !p.deadline) return false;
+            const contractDate = new Date(p.contractDate + 'T00:00:00');
+            const deadline = new Date(p.deadline + 'T00:00:00');
+            return contractDate <= deadline;
+        });
+
+        const onTimeRate = filteredData.length > 0 ? (onTimeProcesses.length / filteredData.length) * 100 : 0;
+
+        document.getElementById('analytics-total-economy').textContent = totalEconomy.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        document.getElementById('analytics-economy-percentage').textContent = `${economyPercentage.toFixed(1)}%`;
+        document.getElementById('analytics-on-time-rate').textContent = `${onTimeRate.toFixed(1)}%`;
+
+        const tableBody = document.getElementById('analytics-table').querySelector('tbody');
+        tableBody.innerHTML = '';
+        
+        filteredData.forEach(p => {
+            const row = tableBody.insertRow();
+            const economy = parseFloat(p.estimatedValue || 0) - parseFloat(p.purchasedValue || 0);
+            const economyPerc = parseFloat(p.estimatedValue) > 0 ? (economy / parseFloat(p.estimatedValue)) * 100 : 0;
+            const economyClass = economy > 0 ? 'economy-positive' : economy < 0 ? 'economy-negative' : 'economy-neutral';
+
+            const deadline = new Date(p.deadline + 'T00:00:00');
+            const contractDate = new Date(p.contractDate + 'T00:00:00');
+            const timeDiff = deadline.getTime() - contractDate.getTime();
+            const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
+
+            let deadlineAnalysis = '';
+            if (dayDiff > 0) {
+                deadlineAnalysis = `<span class="economy-positive">${dayDiff} dia(s) adiantado</span>`;
+            } else if (dayDiff < 0) {
+                deadlineAnalysis = `<span class="economy-negative">${Math.abs(dayDiff)} dia(s) atrasado</span>`;
+            } else {
+                deadlineAnalysis = `<span class="economy-neutral">No prazo</span>`;
+            }
+            
+            row.innerHTML = `
+                <td>${p.processNumber}</td>
+                <td>${p.object}</td>
+                <td>${parseFloat(p.estimatedValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                <td>${parseFloat(p.purchasedValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</td>
+                <td class="${economyClass}">${economy.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} (${economyPerc.toFixed(1)}%)</td>
+                <td>${p.deadline ? new Date(p.deadline + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A'}</td>
+                <td>${p.contractDate ? new Date(p.contractDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A'}</td>
+                <td>${deadlineAnalysis}</td>
+            `;
+        });
+    }
+
+    function renderApp() {
+        renderProcessDashboard();
+        renderPlanDashboard();
+        populateContractPlanTable();
+        populateProcessesTable();
+        renderAnalyticsDashboard();
+    }
+    
+    // =================================================================================
+    // CORE LOGIC & EVENT LISTENERS
+    // =================================================================================
+
+    function getFilteredData() {
+        const status = document.getElementById('filter-status').value;
+        const type = document.getElementById('filter-type').value;
+        const searchTerm = document.getElementById('filter-search-process').value.toLowerCase();
+        
+        let data = processesData;
+
+        if (activeProcessFilter) {
+            if (activeProcessFilter === 'active') {
+                data = data.filter(p => p.fase !== 'Contratado');
+            } else if (activeProcessFilter === 'pending') {
+                data = data.filter(p => p.fase === 'Planejamento' || p.fase === 'Em Licitação');
+            }
+        }
+
+        return data.filter(p => {
+            const searchMatch = searchTerm ?
+                (p.processNumber?.toLowerCase().includes(searchTerm) || p.object.toLowerCase().includes(searchTerm))
+                : true;
+
+            return (status ? p.fase === status : true) && 
+                   (type ? p.type === type : true) && 
+                   searchMatch;
+        });
+    }
+    
+    function toggleContractFields(status) {
+        const contractDateGroup = document.getElementById('contract-date-group');
+        const purchasedValueGroup = document.getElementById('purchased-value-group');
+        if (status === 'Contratado') {
+            contractDateGroup.classList.remove('hidden-field');
+            purchasedValueGroup.classList.remove('hidden-field');
+        } else {
+            contractDateGroup.classList.add('hidden-field');
+            purchasedValueGroup.classList.add('hidden-field');
+        }
+    }
+
+    function openProcessModal(processId = null, planItem = null) {
+        const form = document.getElementById('processForm');
+        form.reset();
+        document.getElementById('process-id').value = '';
+        document.getElementById('file-list-display').innerHTML = '';
+
+        const modalitySelect = document.getElementById('process-modality');
+        modalitySelect.innerHTML = '';
+        PROCESS_MODALITIES.forEach(m => {
+            const option = document.createElement('option');
+            option.value = m;
+            option.textContent = m;
+            modalitySelect.appendChild(option);
+        });
+
+        const existingPlanIdInput = form.querySelector('#process-plan-id');
+        if (existingPlanIdInput) existingPlanIdInput.remove();
+
+        const startDateGroup = document.getElementById('start-date-group');
+        const startDateInput = document.getElementById('process-startDate');
+        const processNumberInput = document.getElementById('process-number');
+        
+        const logHistoryGroup = document.getElementById('log-history-group');
+
+        if (processId) {
+            const process = processesData.find(p => p.id == processId);
+            document.getElementById('modal-title').textContent = 'Editar Processo';
+            document.getElementById('modal-submit-btn').textContent = 'Salvar Alterações';
+            document.getElementById('process-id').value = process.id;
+            
+            Object.keys(process).forEach(key => {
+                const element = document.getElementById(`process-${key}`);
+                if (element) element.value = process[key];
+            });
+            
+            const valueInput = document.getElementById('process-value');
+            const purchasedValueInput = document.getElementById('process-purchasedValue');
+            valueInput.value = parseFloat(process.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            if(process.purchasedValue) {
+                purchasedValueInput.value = parseFloat(process.purchasedValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            } else {
+                purchasedValueInput.value = '';
+            }
+
+            document.getElementById('process-number').value = process.processNumber;
+            document.getElementById('process-sector').value = process.location.sector;
+            document.getElementById('process-responsible').value = process.location.responsible;
+            document.getElementById('process-status').value = process.fase;
+            document.getElementById('process-contractDate').value = process.contractDate || '';
+            
+            startDateGroup.classList.remove('hidden-field');
+            startDateInput.value = process.creationDate.split('T')[0];
+            startDateInput.required = true;
+
+            logHistoryGroup.classList.remove('hidden-field');
+            document.getElementById('log-history-checkbox').checked = true;
+
+        } else if (planItem) {
+            document.getElementById('modal-title').textContent = 'Iniciar Processo do Plano Anual';
+            document.getElementById('modal-submit-btn').textContent = 'Criar Processo';
+            document.getElementById('process-object').value = planItem.object;
+            document.getElementById('process-value').value = parseFloat(planItem.value || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+            document.getElementById('process-deadline').value = planItem.deadline;
+            document.getElementById('process-priority').value = planItem.priority;
+            document.getElementById('process-type').value = planItem.type;
+            document.getElementById('process-status').value = 'Planejamento';
+            
+            const planIdInput = document.createElement('input');
+            planIdInput.type = 'hidden';
+            planIdInput.id = 'process-plan-id';
+            planIdInput.value = planItem.id;
+            form.appendChild(planIdInput);
+
+            startDateGroup.classList.remove('hidden-field');
+            startDateInput.value = new Date().toISOString().split("T")[0];
+            startDateInput.required = true;
+            processNumberInput.required = true;
+
+            logHistoryGroup.classList.add('hidden-field');
+
+        } else {
+            document.getElementById('modal-title').textContent = 'Adicionar Novo Processo';
+            document.getElementById('modal-submit-btn').textContent = 'Adicionar';
+            
+            startDateGroup.classList.remove('hidden-field');
+            startDateInput.value = new Date().toISOString().split("T")[0];
+            startDateInput.required = true;
+
+            logHistoryGroup.classList.add('hidden-field');
+        }
+
+        toggleContractFields(document.getElementById('process-status').value);
+        document.getElementById('processModal').classList.add('active');
+    }
+
+    function openContractDetailsModal(processId) {
+        const modal = document.getElementById('contractDetailsModal');
+        const form = document.getElementById('contractDetailsForm');
+        form.reset();
+        document.getElementById('contract-details-process-id').value = processId;
+        modal.classList.add('active');
+    }
 
    function openProcessDetailModal(processId) {
         const process = processesData.find(p => p.id == processId);
@@ -243,7 +694,6 @@ document.addEventListener('DOMContentLoaded', () => {
             ul.className = 'attachments-list';
             process.attachments.forEach(file => {
                 const li = document.createElement('li');
-                // CORRIGIDO: Apontar para a pasta local 'uploads'
                 const fileUrl = `${UPLOADS_BASE_URL}/${file.filename}`;
                 const fileExtension = file.originalname.split('.').pop();
                 li.innerHTML = `
@@ -272,10 +722,6 @@ document.addEventListener('DOMContentLoaded', () => {
         modal.classList.add('active');
         setupModalTabs(modal);
     }
-
-    // COLE TODO O RESTO DO SEU CÓDIGO AQUI, SEM MAIS ALTERAÇÕES.
-    // ...
-                          }
     function openAttachmentViewer(url, type, name) {
         const modal = document.getElementById('attachmentViewerModal');
         const title = document.getElementById('attachment-viewer-title');
@@ -1812,4 +2258,3 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
     initializeDraggableCards();
 });
-

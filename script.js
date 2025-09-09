@@ -1,31 +1,37 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    // APONTAR PARA OS FICHEIROS JSON LOCAIS NO SEU REPOSITÓRIO.
-    const PLAN_API_URL = './plano.json';
-    const PROCESSES_API_URL = './processos.json';
-    const UPLOADS_BASE_URL = './uploads'; // ATENÇÃO: Crie uma pasta 'uploads' e coloque os seus anexos nela.
+    // =================================================================================
+    // CONFIGURAÇÃO DO SERVIDOR - PASSO FINAL E OBRIGATÓRIO!
+    // SUBSTITUA O URL ABAIXO PELO SEU URL PÚBLICO FORNECIDO PELO RENDER.COM
+    // =================================================================================
+    const API_BASE_URL = 'https://seu-nome-de-servico.onrender.com'; 
 
+    // O resto do código usará a variável acima automaticamente.
+    const PLAN_API_URL = `${API_BASE_URL}/api/plan`;
+    const PROCESSES_API_URL = `${API_BASE_URL}/api/processes`;
+    const UPLOADS_BASE_URL = `${API_BASE_URL}/uploads`;
+    
     // =================================================================================
     // STATE & CONSTANTS
     // =================================================================================
-
+    
     const PROCESS_PHASES = ["Não Iniciado", "Planejamento", "Em Licitação", "Contratado"];
     const PROCESS_SECTORS = ["Agente de Contratação", "Secretária/Presidente", "Comissão de Contratação", "Compras", "Equipe de Apoio", "Jurídico", "Outros"];
     const PROCESS_MODALITIES = ["A definir", "Pregão", "Dispensa", "Inexigibilidade", "Outros"];
-
+    
     const CHART_COLORS = ['#5A67D8', '#9F7AEA', '#4FD1C5', '#F6AD55', '#E53E3E', '#68D391', '#4361ee'];
 
     let planData = [];
     let processesData = [];
     let chartInstances = {};
-    let logoImage = null;
-
+    let logoImage = null; 
+    
     let isDashboardRedirect = false;
     let activeProcessFilter = null;
     let activePlanFilter = null;
     let currentEditingCell = null;
     let alertsToShow = [];
-
+    
     const formatarValorBRL = (e) => {
         const input = e.target;
         let valor = input.value.replace(/\D/g, '');
@@ -48,12 +54,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // =================================================================================
-    // API FUNCTIONS (MODO ESTÁTICO)
+    // API FUNCTIONS
     // =================================================================================
     const fetchPlan = async () => {
         try {
             const response = await fetch(PLAN_API_URL);
-            if (!response.ok) throw new Error('Erro ao buscar plano anual (plano.json).');
+            if (!response.ok) throw new Error('Erro ao buscar plano anual.');
             planData = await response.json();
             planData.forEach(item => {
                 if (item.priority === 'Mídia') {
@@ -62,34 +68,58 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         } catch (error) {
             console.error(error);
-            showToast('Falha ao carregar o plano anual do ficheiro local.');
+            showToast('Falha ao carregar o plano anual do servidor.');
         }
     };
 
     const fetchProcesses = async () => {
         try {
             const response = await fetch(PROCESSES_API_URL);
-            if (!response.ok) throw new Error('Erro ao buscar processos (processos.json).');
+            if (!response.ok) throw new Error('Erro ao buscar processos.');
             processesData = await response.json();
         } catch (error) {
             console.error(error);
-            showToast('Falha ao carregar os processos do ficheiro local.');
+            showToast('Falha ao carregar os processos do servidor.');
         }
     };
 
     const addProcess = async (data) => {
-        showToast('ERRO: Não é possível adicionar processos em modo de visualização.');
-        console.error('Operação não permitida: A função de adicionar necessita de um servidor back-end.');
+        try {
+            const isFormData = data instanceof FormData;
+            await fetch(PROCESSES_API_URL, {
+                method: 'POST',
+                headers: isFormData ? {} : { 'Content-Type': 'application/json' },
+                body: isFormData ? data : JSON.stringify(data)
+            });
+        } catch (error) {
+            console.error('Erro ao adicionar processo:', error);
+            showToast('Falha ao adicionar processo.');
+        }
     };
 
     const updateProcess = async (id, data) => {
-        showToast('ERRO: Não é possível atualizar processos em modo de visualização.');
-        console.error('Operação não permitida: A função de atualizar necessita de um servidor back-end.');
+        try {
+            const isFormData = data instanceof FormData;
+            const response = await fetch(`${PROCESSES_API_URL}/${id}`, {
+                method: 'PUT',
+                headers: isFormData ? {} : { 'Content-Type': 'application/json' },
+                body: isFormData ? data : JSON.stringify(data)
+            });
+            if (!response.ok) throw new Error('Falha na resposta do servidor');
+        } catch (error) {
+            console.error('Erro ao atualizar processo:', error);
+            showToast('Falha ao atualizar processo.');
+        }
     };
 
     const deleteProcess = async (id) => {
-        showToast('ERRO: Não é possível excluir processos em modo de visualização.');
-        console.error('Operação não permitida: A função de excluir necessita de um servidor back-end.');
+        try {
+            await fetch(`${PROCESSES_API_URL}/${id}`, { method: 'DELETE' });
+            showToast('Processo excluído.');
+        } catch (error)
+        {
+            showToast('Falha ao excluir processo.');
+        }
     };
 
     const destroyChart = (chartId) => {
@@ -98,17 +128,17 @@ document.addEventListener('DOMContentLoaded', () => {
             delete chartInstances[chartId];
         }
     };
-
+    
     // =================================================================================
     // RENDER FUNCTIONS
     // =================================================================================
     function renderProcessDashboard() {
         destroyChart('statusChart');
         destroyChart('valueByMonthChart');
-
+        
         document.getElementById('stat-active').textContent = processesData.length;
         document.getElementById('stat-upcoming').textContent = processesData.filter(p => p.fase === 'Em Licitação').length;
-
+        
         const contractedCount = processesData.filter(p => p.fase === 'Contratado').length;
         document.getElementById('stat-value').textContent = contractedCount;
         document.querySelector('[data-card-id="contratados"] .stat-title').textContent = 'Contratados';
@@ -116,7 +146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         document.querySelector('[data-card-id="contratados"]').dataset.filterStatus = 'Contratado';
 
         document.getElementById('stat-overdue').textContent = processesData.filter(p => p.fase === 'Planejamento' || p.fase === 'Em Licitação').length;
-
+        
         const statusCounts = PROCESS_PHASES.reduce((acc, phase) => {
             acc[phase] = processesData.filter(p => p.fase === phase).length;
             return acc;

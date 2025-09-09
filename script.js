@@ -1,120 +1,70 @@
 document.addEventListener('DOMContentLoaded', () => {
 
-    const API_BASE_URL = 'http://10.10.10.128:8080';
-    const PLAN_API_URL = `${API_BASE_URL}/api/plan`;
-    const PROCESSES_API_URL = `${API_BASE_URL}/api/processes`;
-    
-    // =================================================================================
-    // STATE & CONSTANTS
-    // =================================================================================
-    
-    const PROCESS_PHASES = ["Não Iniciado", "Planejamento", "Em Licitação", "Contratado"];
-    const PROCESS_SECTORS = ["Agente de Contratação", "Secretária/Presidente", "Comissão de Contratação", "Compras", "Equipe de Apoio", "Jurídico", "Outros"];
-    const PROCESS_MODALITIES = ["A definir", "Pregão", "Dispensa", "Inexigibilidade", "Outros"];
-    
-    const CHART_COLORS = ['#5A67D8', '#9F7AEA', '#4FD1C5', '#F6AD55', '#E53E3E', '#68D391', '#4361ee'];
+  // CORRIGIDO: Remover o endereço do servidor local.
+// const API_BASE_URL = 'http://10.10.10.128:8080';
+// const PLAN_API_URL = `${API_BASE_URL}/api/plan`;
+// const PROCESSES_API_URL = `${API_BASE_URL}/api/processes`;
 
-    let planData = [];
-    let processesData = [];
-    let chartInstances = {};
-    let logoImage = null; 
-    
-    let isDashboardRedirect = false;
-    let activeProcessFilter = null;
-    let activePlanFilter = null;
-    let currentEditingCell = null;
-    let alertsToShow = [];
-    
-    const formatarValorBRL = (e) => {
-        const input = e.target;
-        let valor = input.value.replace(/\D/g, '');
+// CORRIGIDO: Apontar para os ficheiros JSON locais no seu repositório.
+const PLAN_API_URL = './database.json'; // Assumindo que este é o seu ficheiro do plano.
+const PROCESSES_API_URL = './processos.json';
 
-        if (valor) {
-            const numero = parseFloat(valor) / 100;
-            input.value = numero.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-        } else {
-            input.value = '';
-        }
-    };
+// =================================================================================
+// STATE & CONSTANTS
+// ... (o resto do seu código a partir daqui permanece igual) ...
+// =================================================================================
 
-    const desformatarValorBRL = (valorFormatado) => {
-        if (!valorFormatado) return "0.00";
-        const apenasNumeros = valorFormatado.replace(/\D/g, '');
-        if (apenasNumeros === "") return "0.00";
-        const numero = parseFloat(apenasNumeros) / 100;
-        return numero.toFixed(2);
-    };
+// ... (código existente) ...
 
+// =================================================================================
+// API FUNCTIONS
+// =================================================================================
+const fetchPlan = async () => {
+    try {
+        // CORRIGIDO: A lógica de fetch agora lê o ficheiro JSON local.
+        const response = await fetch(PLAN_API_URL);
+        if (!response.ok) throw new Error('Erro ao buscar plano anual (database.json).');
+        planData = await response.json();
+        planData.forEach(item => {
+            if (item.priority === 'Mídia') {
+                item.priority = 'Média';
+            }
+        });
+    } catch (error) {
+        console.error(error);
+        showToast('Falha ao carregar o plano anual do ficheiro local.');
+    }
+};
 
-    // =================================================================================
-    // API FUNCTIONS
-    // =================================================================================
-    const fetchPlan = async () => {
-        try {
-            const response = await fetch(PLAN_API_URL);
-            if (!response.ok) throw new Error('Erro ao buscar plano anual.');
-            planData = await response.json();
-            planData.forEach(item => {
-                if (item.priority === 'Mídia') {
-                    item.priority = 'Média';
-                }
-            });
-        } catch (error) {
-            console.error(error);
-            showToast('Falha ao carregar o plano anual do servidor.');
-        }
-    };
+const fetchProcesses = async () => {
+    try {
+        // CORRIGIDO: A lógica de fetch agora lê o ficheiro JSON local.
+        const response = await fetch(PROCESSES_API_URL);
+        if (!response.ok) throw new Error('Erro ao buscar processos (processos.json).');
+        processesData = await response.json();
+    } catch (error) {
+        console.error(error);
+        showToast('Falha ao carregar os processos do ficheiro local.');
+    }
+};
 
-    const fetchProcesses = async () => {
-        try {
-            const response = await fetch(PROCESSES_API_URL);
-            if (!response.ok) throw new Error('Erro ao buscar processos.');
-            processesData = await response.json();
-        } catch (error) {
-            console.error(error);
-            showToast('Falha ao carregar os processos do servidor.');
-        }
-    };
+// CORRIGIDO: Funções de escrita agora mostram um alerta, pois não funcionam em modo estático.
+const addProcess = async (data) => {
+    showToast('ERRO: Não é possível adicionar processos em modo de visualização.');
+    console.error('Operação não permitida: A função de adicionar necessita de um servidor back-end.');
+};
 
-    const addProcess = async (data) => {
-        try {
-            const isFormData = data instanceof FormData;
-            await fetch(PROCESSES_API_URL, {
-                method: 'POST',
-                headers: isFormData ? {} : { 'Content-Type': 'application/json' },
-                body: isFormData ? data : JSON.stringify(data)
-            });
-        } catch (error) {
-            console.error('Erro ao adicionar processo:', error);
-            showToast('Falha ao adicionar processo.');
-        }
-    };
+const updateProcess = async (id, data) => {
+    showToast('ERRO: Não é possível atualizar processos em modo de visualização.');
+    console.error('Operação não permitida: A função de atualizar necessita de um servidor back-end.');
+};
 
-    const updateProcess = async (id, data) => {
-        try {
-            const isFormData = data instanceof FormData;
-            const response = await fetch(`${PROCESSES_API_URL}/${id}`, {
-                method: 'PUT',
-                headers: isFormData ? {} : { 'Content-Type': 'application/json' },
-                body: isFormData ? data : JSON.stringify(data)
-            });
-            if (!response.ok) throw new Error('Falha na resposta do servidor');
-        } catch (error) {
-            console.error('Erro ao atualizar processo:', error);
-            showToast('Falha ao atualizar processo.');
-        }
-    };
+const deleteProcess = async (id) => {
+    showToast('ERRO: Não é possível excluir processos em modo de visualização.');
+    console.error('Operação não permitida: A função de excluir necessita de um servidor back-end.');
+};
 
-    const deleteProcess = async (id) => {
-        try {
-            await fetch(`${PROCESSES_API_URL}/${id}`, { method: 'DELETE' });
-            showToast('Processo excluído.');
-        } catch (error)
-        {
-            showToast('Falha ao excluir processo.');
-        }
-    };
-
+// ... (O resto do seu código a partir daqui pode continuar como está) ...
     const destroyChart = (chartId) => {
         if (chartInstances[chartId]) {
             chartInstances[chartId].destroy();
@@ -2281,4 +2231,5 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
     initializeDraggableCards();
 });
+
 

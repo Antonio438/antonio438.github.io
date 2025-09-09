@@ -1,0 +1,684 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>e-Licitações cmeg</title>
+    
+    <link rel="stylesheet" href="style.css">
+    
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body class="theme-dark">
+
+    <div class="app-container">
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header"><i class="fas fa-gavel sidebar-logo"></i><span class="sidebar-title">e-Licitações</span></div>
+           <nav class="sidebar-nav">
+                <a href="#dashboards" class="nav-item active" data-section="dashboards"><i class="fas fa-chart-pie"></i>Dashboards</a>
+                <a href="#processes" class="nav-item" data-section="processes"><i class="fas fa-list-check"></i>Processos</a>
+                <a href="#contract-plan" class="nav-item" data-section="contract-plan"><i class="fas fa-file-contract"></i>Plano de Contratação</a>
+                <a href="#reports" class="nav-item" data-section="reports"><i class="fas fa-file-alt"></i>Relatórios</a>
+                <a href="#help-section" class="nav-item" data-section="help-section"><i class="fas fa-question-circle"></i>Ajuda</a>
+            </nav>
+
+            <div class="theme-switch">
+                <span class="theme-label">Tema Escuro</span>
+                <label class="switch"><input type="checkbox" id="theme-toggle" checked><span class="slider"></span></label>
+            </div>
+
+            <div class="sidebar-logo-container">
+                <img src="logo.png" alt="Logo da Câmara Municipal de Embu-Guaçu">
+                <p class="agent-title">Agente de contratação</p>
+                <p class="team-name">Equipe de Apoio - CMEG</p>
+            </div>
+
+            <div class="sidebar-footer">
+                <p class="footer-credit">Desenvolvido por Antônio Silva</p>
+                <p class="footer-credit">e-licitações versão 1.0</p>
+            </div>
+        </aside>
+
+        <main class="main-content" id="main-content">
+            <button class="btn-icon sidebar-toggle-btn" id="sidebar-toggle"><i class="fas fa-chevron-left"></i></button>
+
+            <section id="dashboards" class="content-section active">
+
+                <div class="dashboard-nav-tabs">
+                    <button class="dashboard-tab-btn active" data-tab-id="monitoramento"><i class="fas fa-tv"></i> Monitoramento de Contratações</button>
+                    <button class="dashboard-tab-btn" data-tab-id="gerencial"><i class="fas fa-sitemap"></i> Análise Gerencial do Plano</button>
+                    <button class="dashboard-tab-btn" data-tab-id="desempenho"><i class="fas fa-chart-line"></i> Análise de Desempenho</button>
+                </div>
+        
+                <div class="dashboard-content-container">
+                    <div class="dashboard-tab-content active" data-tab-id="monitoramento">
+                        <div class="dashboard-stats" id="operational-stats">
+                            <div class="stat-card primary" draggable="true" data-card-id="total_processos">
+                                <div class="stat-header"><span class="stat-title">Total de Processos</span><div class="stat-icon icon-primary"><i class="fas fa-layer-group"></i></div></div><span class="stat-value" id="stat-active">0</span><div class="stat-change">Total de processos cadastrados</div>
+                            </div>
+                            <div class="stat-card warning clickable" data-filter-status="Em Licitação" draggable="true" data-card-id="em_andamento">
+                                <div class="stat-header"><span class="stat-title">Em licitação</span><div class="stat-icon icon-warning"><i class="fas fa-gavel"></i></div></div><span class="stat-value" id="stat-upcoming">0</span><div class="stat-change">Processos em fase de contratação</div>
+                            </div>
+                            <div class="stat-card success clickable" data-filter-status="Contratado" draggable="true" data-card-id="contratados">
+                                <div class="stat-header"><span class="stat-title">Contratados</span><div class="stat-icon icon-success"><i class="fas fa-file-signature"></i></div></div><span class="stat-value" id="stat-value">0</span><div class="stat-change">Total de processos contratados</div>
+                            </div>
+                            <div class="stat-card danger clickable" data-filter-process="pending" draggable="true" data-card-id="pendente">
+                                <div class="stat-header"><span class="stat-title">Pendente</span><div class="stat-icon icon-danger"><i class="fas fa-hourglass-half"></i></div></div><span class="stat-value" id="stat-overdue">0</span><div class="stat-change">Iniciados, mas não contratados</div>
+                            </div>
+                        </div>
+                        <div class="charts-container">
+                            <div class="chart-card"><div class="chart-header"><h3 class="chart-title">Processos por Status</h3></div><div class="chart-content"><canvas id="statusChart"></canvas></div></div>
+                            <div class="chart-card"><div class="chart-header"><h3 class="chart-title">Planejado vs. Contratado por Mês</h3></div><div class="chart-content"><canvas id="valueByMonthChart"></canvas></div></div>
+                        </div>
+                    </div>
+        
+                    <div class="dashboard-tab-content" data-tab-id="gerencial">
+                        <div class="dashboard-stats" id="strategic-stats">
+                            <div class="stat-card primary card-top-row" draggable="true" data-card-id="valor_total_planejado">
+                                <div class="stat-header"><span class="stat-title">Valor Total Planejado</span><div class="stat-icon icon-primary"><i class="fas fa-bullseye"></i></div></div>
+                                <span class="stat-value" id="plan-total-value">R$ 0,00</span>
+                                <div class="stat-change">Soma de todos os itens do plano</div>
+                            </div>
+                            <div class="stat-card success card-top-row" draggable="true" data-card-id="valor_executado">
+                                <div class="stat-header"><span class="stat-title">Valor Já Executado</span><div class="stat-icon icon-success"><i class="fas fa-check-double"></i></div></div>
+                                <span class="stat-value" id="plan-executed-value">R$ 0,00</span>
+                                <div class="stat-change">Soma dos processos contratados</div>
+                            </div>
+                            <div class="stat-card info card-top-row" draggable="true" data-card-id="progresso_plano">
+                                <div class="stat-header"><span class="stat-title">Progresso do Plano</span><div class="stat-icon icon-info"><i class="fas fa-spinner"></i></div></div>
+                                <span class="stat-value" id="plan-progress">0%</span>
+                                <div class="stat-change">Percentual de itens do plano já iniciados</div>
+                            </div>
+                            <div class="stat-card danger clickable card-bottom-row" data-filter-plan="upcoming" draggable="true" data-card-id="itens_a_iniciar">
+                                <div class="stat-header"><span class="stat-title">Itens a Iniciar (Próx. 30 dias)</span><div class="stat-icon icon-danger"><i class="fas fa-hourglass-start"></i></div></div>
+                                <span class="stat-value" id="plan-upcoming-items">0</span>
+                                <div class="stat-change">Itens cuja data limite se aproxima</div>
+                            </div>
+                            <div class="stat-card danger clickable card-bottom-row" data-filter-plan="overdue" draggable="true" data-card-id="itens_atrasados">
+                                <div class="stat-header"><span class="stat-title">Itens Atrasados</span><div class="stat-icon icon-danger"><i class="fas fa-exclamation-triangle"></i></div></div>
+                                <span class="stat-value" id="plan-overdue-items">0</span>
+                                <div class="stat-change">Prazo expirado e não contratado</div>
+                            </div>
+                        </div>
+                        <div class="charts-container">
+                            <div class="chart-card">
+                                <div class="chart-header"><h3 class="chart-title">Status Geral do Plano</h3></div>
+                                <div class="chart-content"><canvas id="planStatusChart"></canvas></div>
+                            </div>
+                            <div class="chart-card">
+                                <div class="chart-header"><h3 class="chart-title">Valor Planejado por Mês</h3></div>
+                                <div class="chart-content"><canvas id="planValueByMonthChart"></canvas></div>
+                            </div>
+                        </div>
+                    </div>
+        
+                    <div class="dashboard-tab-content" data-tab-id="desempenho">
+                        <div class="collapsible-filters collapsed">
+                            <div class="collapsible-header">
+                                <h4><i class="fas fa-filter"></i> Filtros da Análise</h4>
+                                <div class="header-actions">
+                                    <button class="btn-icon btn-clear-filters" id="clear-analytics-filters" data-tooltip="Limpar Filtros" style="display: none;"><i class="fas fa-eraser"></i></button>
+                                    <button class="btn-icon btn-toggle-filters" data-tooltip="Ocultar/Exibir Filtros">
+                                        <i class="fas fa-chevron-up"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="collapsible-body">
+                                <div class="filters-grid analytics-filters">
+                                    <div class="filter-group">
+                                        <label for="filter-analytics-month" class="filter-label">Mês da Contratação</label>
+                                        <select id="filter-analytics-month" class="filter-select">
+                                            <option value="">Todos</option>
+                                            <option value="0">Janeiro</option>
+                                            <option value="1">Fevereiro</option>
+                                            <option value="2">Março</option>
+                                            <option value="3">Abril</option>
+                                            <option value="4">Maio</option>
+                                            <option value="5">Junho</option>
+                                            <option value="6">Julho</option>
+                                            <option value="7">Agosto</option>
+                                            <option value="8">Setembro</option>
+                                            <option value="9">Outubro</option>
+                                            <option value="10">Novembro</option>
+                                            <option value="11">Dezembro</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="filter-analytics-type" class="filter-label">Tipo</label>
+                                        <select id="filter-analytics-type" class="filter-select">
+                                            <option value="">Todos</option>
+                                            <option>Compra</option>
+                                            <option>Serviço</option>
+                                            <option>Obra</option>
+                                        </select>
+                                    </div>
+                                    <div class="filter-group">
+                                        <label for="filter-analytics-modality" class="filter-label">Modalidade</label>
+                                        <select id="filter-analytics-modality" class="filter-select">
+                                            <option value="">Todos</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="dashboard-stats" id="analytics-stats">
+                             <div class="stat-card success" data-card-id="total_economy">
+                                <div class="stat-header"><span class="stat-title">Economia Total</span><div class="stat-icon icon-success"><i class="fas fa-piggy-bank"></i></div></div><span class="stat-value" id="analytics-total-economy">R$ 0,00</span><div class="stat-change">Soma de (Valor Estimado - Valor Final)</div>
+                            </div>
+                            <div class="stat-card info" data-card-id="economy_percentage">
+                                <div class="stat-header"><span class="stat-title">Economia Média</span><div class="stat-icon icon-info"><i class="fas fa-percentage"></i></div></div><span class="stat-value" id="analytics-economy-percentage">0%</span><div class="stat-change">Percentual médio economizado por processo</div>
+                            </div>
+                            <div class="stat-card primary" data-card-id="on_time_rate">
+                                <div class="stat-header"><span class="stat-title">Processos no Prazo</span><div class="stat-icon icon-primary"><i class="fas fa-calendar-check"></i></div></div><span class="stat-value" id="analytics-on-time-rate">0%</span><div class="stat-change">Processos contratados antes do prazo limite</div>
+                            </div>
+                        </div>
+                         <div class="processes-table-container">
+                            <table class="processes-table" id="analytics-table">
+                                <thead>
+                                    <tr>
+                                        <th>Nº Processo</th>
+                                        <th>Objeto</th>
+                                        <th>Valor Estimado</th>
+                                        <th>Valor Final</th>
+                                        <th>Economia</th>
+                                        <th>Prazo Limite</th>
+                                        <th>Data Contratação</th>
+                                        <th>Análise do Prazo</th>
+                                    </tr>
+                                </thead>
+                                <tbody></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+            </section>
+
+            <section id="processes" class="content-section">
+                <div class="section-header">
+                    <div class="section-header-left">
+                        <h2>Gerenciamento de Processos</h2>
+                        <button class="btn btn-secondary btn-go-to-dashboard"><i class="fas fa-chart-pie"></i> Voltar ao Painel</button>
+                    </div>
+                    <button class="btn btn-primary" id="add-process-btn"><i class="fas fa-plus"></i>Adicionar Processo</button>
+                </div>
+                <hr style="margin: 0.5rem 0 1.5rem 0;">
+                
+                <div class="collapsible-filters collapsed">
+                    <div class="collapsible-header">
+                        <h4><i class="fas fa-filter"></i> Filtros e Pesquisa</h4>
+                        <div class="header-actions">
+                            <button class="btn-icon btn-clear-filters" id="clear-process-filters" data-tooltip="Limpar Filtros" style="display: none;"><i class="fas fa-eraser"></i></button>
+                            <button class="btn-icon btn-toggle-filters" data-tooltip="Ocultar/Exibir Filtros">
+                                <i class="fas fa-chevron-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="collapsible-body">
+                        <div class="filters-grid">
+                            <div class="filter-group search-group">
+                                <label for="filter-search-process" class="filter-label">Pesquisar</label>
+                                <input type="search" id="filter-search-process" class="filter-input" placeholder="Pesquisar por Nº Processo ou Objeto...">
+                            </div>
+                            <div class="filter-group">
+                                <label for="filter-status" class="filter-label">Status</label>
+                                <select id="filter-status" class="filter-select"><option value="">Todos</option><option>Não Iniciado</option><option>Planejamento</option><option>Em Licitação</option><option>Contratado</option></select>
+                            </div>
+                            <div class="filter-group">
+                                <label for="filter-type" class="filter-label">Tipo</label>
+                                <select id="filter-type" class="filter-select"><option value="">Todos</option><option>Compra</option><option>Serviço</option><option>Obra</option></select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="processes-table-container">
+                    <table class="processes-table" id="processes-table">
+                        <thead><tr><th>Nº Processo</th><th>Objeto</th><th>Fase</th><th>Modalidade</th><th>Localização</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="contract-plan" class="content-section">
+                <div class="section-header">
+                    <div class="section-header-left">
+                        <h2>Plano de Contratação Anual</h2>
+                        <button class="btn btn-secondary btn-go-to-dashboard"><i class="fas fa-chart-pie"></i> Voltar ao Painel</button>
+                    </div>
+                </div>
+                <hr style="margin: 0.5rem 0 1.5rem 0;">
+
+                <div class="collapsible-filters collapsed">
+                    <div class="collapsible-header">
+                        <h4><i class="fas fa-search"></i> Pesquisa</h4>
+                        <div class="header-actions">
+                             <button class="btn-icon btn-clear-filters" id="clear-plan-filters" data-tooltip="Limpar Filtros" style="display: none;"><i class="fas fa-eraser"></i></button>
+                            <button class="btn-icon btn-toggle-filters" data-tooltip="Ocultar/Exibir Pesquisa">
+                                <i class="fas fa-chevron-up"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="collapsible-body">
+                        <div class="filter-group search-group">
+                            <label for="filter-search-plan" class="filter-label">Pesquisar</label>
+                            <input type="search" id="filter-search-plan" class="filter-input" placeholder="Pesquisar por Item ou Descrição...">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="processes-table-container">
+                    <table class="processes-table" id="contract-plan-table">
+                         <thead><tr><th>Item</th><th>Descrição do Objeto</th><th>Valor Estimado</th><th>Prioridade</th><th>Data Limite</th><th>Status</th><th>Ações</th></tr></thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </section>
+
+            <section id="reports" class="content-section">
+                <div class="section-header">
+                    <h2>Central de Relatórios</h2>
+                </div>
+                <p class="section-subtitle">Gere relatórios detalhados para análise e acompanhamento.</p>
+                
+                <div class="dashboard-nav-tabs" id="report-tabs-nav">
+                    <button class="dashboard-tab-btn active" data-tab-id="processo"><i class="fas fa-search"></i> Acompanhamento por Processo</button>
+                    <button class="dashboard-tab-btn" data-tab-id="gerencial"><i class="fas fa-file-invoice"></i> Relatório Gerencial</button>
+                </div>
+
+                <div class="reports-container">
+                    <div class="report-tab-content active" data-tab-id="processo">
+                        <div class="report-card">
+                            <div class="report-card-content">
+                                <p class="report-card-description">Selecione um processo para gerar um relatório de rastreamento completo, incluindo histórico de fases, localização e resumo dos dados.</p>
+                                <div class="report-card-actions">
+                                    <div class="searchable-select-container">
+                                        <input type="text" id="report-process-search" class="filter-input" placeholder="Pesquisar por Nº ou Objeto do Processo...">
+                                        <div id="report-process-list" class="searchable-select-list"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="report-tab-content" data-tab-id="gerencial">
+                        <div class="report-card">
+                            <div class="report-card-content">
+                                <p class="report-card-description">
+                                    Gere um relatório consolidado com as principais métricas de planejamento, monitoramento e desempenho. Use os filtros para refinar sua análise e obter insights estratégicos.
+                                </p>
+                                <div class="report-card-actions">
+                                    <button class="btn btn-primary" data-report-type="unified-summary"><i class="fas fa-file-pdf"></i> Gerar Relatório Gerencial Unificado</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+            
+                    <div id="report-view-area" class="report-view-area hidden-field">
+                        <div class="report-view-header">
+                            <h3 id="report-view-title">Visualização do Relatório</h3>
+                            <button class="btn btn-primary" id="report-pdf-btn"><i class="fas fa-file-pdf"></i> Gerar PDF de Acompanhamento</button>
+                        </div>
+                        <div id="report-view-content" class="report-view-content"></div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="help-section" class="content-section">
+                <div class="section-header">
+                    <h2><i class="fas fa-question-circle"></i> Central de Ajuda do e-Licitações</h2>
+                </div>
+                <p class="section-subtitle">Um guia completo para você dominar o gerenciamento de contratações.</p>
+                
+                <div class="help-content-wrapper">
+                
+                    <h3><i class="fas fa-rocket"></i> Conceitos Principais e Dicas de Produtividade</h3>
+                    <ul>
+                        <li><strong>Visão Integrada:</strong> O sistema conecta o <strong>Plano de Contratação</strong> aos <strong>Processos</strong>. Iniciar um processo a partir do plano já preenche os dados para você, garantindo consistência.</li>
+                        <li><strong>Alertas Inteligentes:</strong> Ao marcar um processo como <strong>Importante <i class="far fa-star"></i></strong>, você pode criar um alerta com data e anotações. O sistema te avisará no dia certo para que nada passe despercebido.</li>
+                        <li><strong>Edição Rápida:</strong> Para agilizar o trabalho, você pode clicar diretamente sobre os campos "Fase", "Modalidade" ou "Localização" na tabela de processos para alterá-los instantaneamente, sem precisar abrir a tela de edição completa.</li>
+                        <li><strong>Navegação Direta:</strong> Nos dashboards, os cards coloridos (como "Em andamento" ou "Itens Atrasados") são atalhos. Clicar neles te leva diretamente para a tela correspondente com os filtros já aplicados.</li>
+                    </ul>
+                
+                    <hr>
+                
+                    <h3><i class="fas fa-chart-pie"></i> Dashboards: Sua Visão Estratégica</h3>
+                    <p>A tela inicial oferece uma visão geral de todas as contratações em três abas:</p>
+                    <ul>
+                        <li><strong>Monitoramento de Contratações:</strong> Focada no dia a dia.
+                            <ul>
+                                <li><strong>Total de Processos:</strong> Todos os processos já cadastrados.</li>
+                                <li><strong>Em andamento:</strong> Processos que estão na fase de licitação.</li>
+                                <li><strong>Contratados:</strong> Processos que já foram finalizados com sucesso.</li>
+                                <li><strong>Pendente:</strong> Soma dos processos em "Planejamento" e "Em Licitação", ou seja, tudo que está aberto e precisa de atenção.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Análise Gerencial do Plano:</strong> Acompanha a execução do Plano de Contratação Anual (PCA).
+                            <ul>
+                                <li><strong>Progresso do Plano:</strong> Percentual de itens do plano que já viraram um processo.</li>
+                                <li><strong>Itens a Iniciar (Próx. 30 dias):</strong> Alerta sobre itens do plano cujo prazo limite está chegando.</li>
+                                <li><strong>Itens Atrasados:</strong> Itens do plano cujo prazo limite já passou e ainda não foram contratados.</li>
+                            </ul>
+                        </li>
+                        <li><strong>Análise de Desempenho:</strong> Avalia a eficiência das contratações já finalizadas.
+                            <ul>
+                                <li><strong>Economia Total:</strong> Mostra o quanto a câmara economizou, comparando o valor estimado com o valor final contratado.</li>
+                                <li><strong>Processos no Prazo:</strong> Mede a eficiência da equipe em finalizar os processos antes da data limite estipulada.</li>
+                            </ul>
+                        </li>
+                    </ul>
+                
+                    <hr>
+                
+                    <h3><i class="fas fa-list-check"></i> Gerenciamento de Processos</h3>
+                    <p>Esta é a área central para gerenciar todos os processos de licitação.</p>
+                    <ul>
+                        <li><strong>Adicionar Processo:</strong> Crie um novo processo do zero, seja ele avulso ou relacionado ao plano.</li>
+                        <li><strong>Marcar como Importante <i class="far fa-star"></i>:</strong> Use a estrela para destacar um processo. Ele ficará no topo da lista e você terá a opção de criar um alerta para acompanhamento.</li>
+                        <li><strong>Ver Detalhes Completos:</strong> Clique no <strong>Número do Processo</strong> ou no <strong>Objeto</strong> para abrir uma janela com todas as informações, incluindo o histórico completo de fases, o histórico de localização (por quais setores o processo passou) e a gestão de anexos.</li>
+                    </ul>
+                
+                    <hr>
+                
+                    <h3><i class="fas fa-file-contract"></i> Plano de Contratação</h3>
+                    <p>Visualize todos os itens planejados para o ano. O objetivo é transformar cada item desta lista em um processo.</p>
+                    <ul>
+                        <li><strong>Iniciar Processo:</strong> Ao lado de cada item "Não Iniciado", o botão <strong><i class="fas fa-play"></i> Iniciar</strong> cria um novo processo na tela de Gerenciamento, já preenchendo os dados principais para você.</li>
+                    </ul>
+                
+                    <hr>
+                
+                    <h3><i class="fas fa-file-alt"></i> Central de Relatórios</h3>
+                    <p>Gere documentos em PDF para análise, transparência e prestação de contas.</p>
+                    <ul>
+                        <li><strong>Acompanhamento por Processo:</strong> Crie um "mapa" completo de um processo específico, mostrando todo o seu histórico de movimentação e fases.</li>
+                        <li><strong>Relatório Gerencial:</strong> Gere um relatório consolidado com os principais indicadores de desempenho (KPIs) financeiros e operacionais. Ideal para apresentações e análises estratégicas.</li>
+                    </ul>
+                </div>
+            </section>
+            </main>
+    </div>
+
+    <div id="cell-editor-popover" class="cell-editor">
+        <div id="cell-editor-content"></div>
+        <div class="cell-editor-actions">
+            <button id="cell-editor-cancel" class="btn-action btn-excluir">Cancelar</button>
+            <button id="cell-editor-save" class="btn-action btn-alterar">Salvar</button>
+        </div>
+    </div>
+
+    <div id="processModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header"><h3 class="modal-title" id="modal-title">Adicionar Novo Processo</h3><button class="modal-close">&times;</button></div>
+            <form id="processForm">
+                <input type="hidden" id="process-id">
+                <div class="modal-body">
+                    <div class="form-group"><label for="process-number" class="form-label">Número do Processo</label><input type="text" id="process-number" class="form-control" required></div>
+                    
+                    <div class="form-group hidden-field" id="start-date-group">
+                        <label for="process-startDate" class="form-label">Data de Início</label>
+                        <input type="date" id="process-startDate" class="form-control">
+                    </div>
+                    
+                    <div class="form-group full-width"><label for="process-object" class="form-label">Objeto da Contratação</label><input type="text" id="process-object" class="form-control" required></div>
+                    
+                    <div class="form-group"><label for="process-value" class="form-label">Valor Estimado (R$)</label><input type="text" inputmode="decimal" id="process-value" class="form-control" required></div>
+                    
+                    <div class="form-group"><label for="process-deadline" class="form-label">Data-Limite</label><input type="date" id="process-deadline" class="form-control" required></div>
+                    <div class="form-group"><label for="process-priority" class="form-label">Prioridade</label><select id="process-priority" class="form-control"><option>Alta</option><option>Média</option><option>Baixa</option></select></div>
+                    <div class="form-group"><label for="process-type" class="form-label">Tipo</label><select id="process-type" class="form-control"><option>Serviço</option><option>Compra</option><option>Obra</option></select></div>
+                    <div class="form-group"><label for="process-status" class="form-label">Fase</label>
+                        <select id="process-status" class="form-control"><option>Não Iniciado</option><option>Planejamento</option><option>Em Licitação</option><option>Contratado</option></select>
+                    </div>
+                    <div class="form-group"><label for="process-modality" class="form-label">Modalidade</label><select id="process-modality" class="form-control"></select></div>
+                    <div class="form-group"><label for="process-sector" class="form-label">Setor</label><select id="process-sector" class="form-control"><option>Agente de Contratação</option><option>Secretária/Presidente</option><option>Comissão de Contratação</option><option>Compras</option><option>Equipe de Apoio</option><option>Jurídico</option><option>Outros</option></select></div>
+                    <div class="form-group full-width"><label for="process-responsible" class="form-label">Responsável (Opcional)</label><input type="text" id="process-responsible" class="form-control"></div>
+                    
+                    <div class="form-group conditional-field hidden-field" id="contract-date-group">
+                        <label for="process-contractDate" class="form-label">Data de Contratação</label>
+                        <input type="date" id="process-contractDate" class="form-control">
+                    </div>
+                    
+                    <div class="form-group conditional-field hidden-field" id="purchased-value-group">
+                        <label for="process-purchasedValue" class="form-label">Valor Final Contratado (R$)</label>
+                        <input type="text" inputmode="decimal" id="process-purchasedValue" class="form-control">
+                    </div>
+
+                    <div class="form-group full-width"><label for="process-description" class="form-label">Descrição / Observações</label><textarea id="process-description" class="form-control" rows="4"></textarea></div>
+                    <div class="form-group full-width">
+                        <label class="form-label">Anexos</label>
+                        <input type="file" id="process-files" multiple hidden>
+                        <label for="process-files" class="file-upload-label"><i class="fas fa-paperclip"></i> Anexar Arquivos</label>
+                        <div id="file-list-display" class="file-list-display"></div>
+                    </div>
+                    
+                    <div class="form-group full-width hidden-field" id="log-history-group">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="log-history-checkbox" checked>
+                            <label class="form-check-label" for="log-history-checkbox">
+                                Registrar esta alteração no histórico do processo
+                            </label>
+                        </div>
+                    </div>
+                    </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="modal-submit-btn">Adicionar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="contractDetailsModal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3 class="modal-title">Detalhes da Contratação</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="contractDetailsForm">
+                <input type="hidden" id="contract-details-process-id">
+                <div class="modal-body-simple">
+                    <div class="form-group full-width">
+                        <label for="contract-purchasedValue" class="form-label">Valor Final Contratado (R$)</label>
+                        <input type="text" inputmode="decimal" id="contract-purchasedValue" class="form-control" required>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="contract-contractDate" class="form-label">Data de Contratação</label>
+                        <input type="date" id="contract-contractDate" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="processDetailModal" class="modal">
+        <div class="modal-content modal-lg">
+            <div class="modal-header">
+                <div>
+                    <h3 class="modal-title" id="detail-modal-title">Detalhes do Processo</h3>
+                    <p class="section-subtitle" id="detail-modal-object" style="margin: 0.25rem 0 0 0;"></p>
+                </div>
+                <div class="modal-header-actions">
+                    <button class="btn-icon" id="btn-expand-modal" data-tooltip="Expandir / Recolher">
+                        <i class="fas fa-expand-arrows-alt"></i>
+                    </button>
+                    <button class="modal-close">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body-details">
+                <div class="detail-modal-metrics" id="detail-modal-metrics"></div>
+                <div class="detail-tabs-container">
+                    <div class="detail-tabs-nav">
+                        <button class="detail-tab-btn active" data-tab="details"><i class="fas fa-info-circle"></i> Detalhes</button>
+                        <button class="detail-tab-btn" data-tab="history"><i class="fas fa-history"></i> Histórico</button>
+                        <button class="detail-tab-btn" data-tab="attachments"><i class="fas fa-paperclip"></i> Anexos</button>
+                    </div>
+                    <div class="detail-tab-content active" data-tab="details">
+                        <div class="details-info-grid" id="detail-tab-details"></div>
+                    </div>
+                    <div class="detail-tab-content" data-tab="history" id="detail-tab-history"></div>
+                    <div class="detail-tab-content" data-tab="attachments">
+                        <div class="attachments-grid">
+                            <div class="attachments-list-container"></div>
+                            <div class="attachments-preview-container">
+                                <div class="preview-placeholder">
+                                    <i class="fas fa-file-alt"></i>
+                                    <p>Selecione um arquivo para visualizar</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="attachment-upload-area">
+                            <input type="file" id="detail-modal-file-input" multiple hidden>
+                            <label for="detail-modal-file-input" class="file-upload-label"><i class="fas fa-paperclip"></i> Adicionar Anexos</label>
+                            <div id="detail-modal-file-list" class="file-list-display"></div>
+                            <button class="btn btn-primary" id="detail-modal-upload-btn" style="display: none;"><i class="fas fa-upload"></i> Enviar Arquivos</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="filterReportModal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3 class="modal-title" id="filter-report-modal-title">Filtros para Relatório</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body-simple">
+                <div class="form-group full-width" id="filter-group-month">
+                    <label for="report-filter-month" class="form-label">Mês de Referência</label>
+                    <select id="report-filter-month" class="form-control">
+                        <option value="">Todos os Meses</option>
+                        <option value="0">Janeiro</option><option value="1">Fevereiro</option><option value="2">Março</option>
+                        <option value="3">Abril</option><option value="4">Maio</option><option value="5">Junho</option>
+                        <option value="6">Julho</option><option value="7">Agosto</option><option value="8">Setembro</option>
+                        <option value="9">Outubro</option><option value="10">Novembro</option><option value="11">Dezembro</option>
+                    </select>
+                </div>
+                <div class="form-group full-width" id="filter-group-status">
+                    <label for="report-filter-status" class="form-label">Status do Processo</label>
+                    <select id="report-filter-status" class="form-control">
+                        <option value="">Todos</option>
+                        <option>Não Iniciado</option><option>Planejamento</option><option>Em Licitação</option>
+                        <option>Contratado</option>
+                    </select>
+                </div>
+                <div class="form-group full-width" id="filter-group-priority">
+                    <label for="report-filter-priority" class="form-label">Prioridade do Item</label>
+                    <select id="report-filter-priority" class="form-control">
+                        <option value="">Todas</option>
+                        <option>Alta</option><option>Média</option><option>Baixa</option>
+                    </select>
+                </div>
+                <div class="form-group full-width" id="filter-group-type">
+                    <label for="report-filter-type" class="form-label">Tipo de Objeto</label>
+                    <select id="report-filter-type" class="form-control">
+                        <option value="">Todos</option>
+                        <option>Compra</option><option>Serviço</option><option>Obra</option>
+                    </select>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="generate-report-with-filters-btn">Gerar Relatório</button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="toast-container"></div>
+
+    <div id="attachmentViewerModal" class="modal">
+        <div class="modal-content modal-xl">
+            <div class="modal-header">
+                <h3 class="modal-title" id="attachment-viewer-title">Visualizador de Anexo</h3>
+                <div class="modal-header-actions">
+                    <button class="btn btn-secondary" id="attachment-viewer-print-btn"><i class="fas fa-print"></i> Imprimir</button>
+                    <button class="modal-close">&times;</button>
+                </div>
+            </div>
+            <div class="modal-body-viewer" id="attachment-viewer-content">
+                </div>
+        </div>
+    </div>
+    
+    <div id="viewAlertModal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3 class="modal-title"><i class="fas fa-bell" style="color: #ffc107;"></i> Alerta de Processo</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <div class="modal-body-simple" style="text-align: center;">
+                <i class="fas fa-exclamation-triangle alert-icon"></i>
+                <div id="alert-process-info" class="alert-process-info"></div>
+                <p><strong>Anotação do Alerta:</strong></p>
+                <div id="alert-note" class="alert-note"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="deactivate-alert-btn">Desativar</button>
+                <button type="button" class="btn btn-primary" id="ok-alert-btn">OK</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="markImportantModal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3 class="modal-title">Marcar Processo como Importante</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <form id="markImportantForm">
+                <input type="hidden" id="important-process-id">
+                <div class="modal-body-simple">
+                    <div class="form-group full-width">
+                        <label for="alert-note-input" class="form-label">Anotação do Alerta</label>
+                        <textarea id="alert-note-input" class="form-control" rows="4" required></textarea>
+                    </div>
+                    <div class="form-group full-width">
+                        <label for="alert-date-input" class="form-label">Data para o Alerta</label>
+                        <input type="date" id="alert-date-input" class="form-control" required>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary modal-close-btn">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Alerta</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div id="confirmAlertModal" class="modal">
+        <div class="modal-content modal-sm">
+            <div class="modal-header">
+                <h3 class="modal-title">Criar Alerta?</h3>
+                <button class="modal-close">&times;</button>
+            </div>
+            <input type="hidden" id="confirm-alert-process-id">
+            <div class="modal-body-simple">
+                <p>O processo foi marcado como importante. Deseja criar um alerta de acompanhamento para ele?</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" id="cancel-create-alert-btn">Agora Não</button>
+                <button type="button" class="btn btn-primary" id="confirm-create-alert-btn">Sim, Criar Alerta</button>
+            </div>
+        </div>
+    </div>
+
+    <button id="back-to-top-btn" title="Voltar ao topo"><i class="fas fa-arrow-up"></i></button>
+
+    <script src="script.js" defer></script>
+
+</body>
+</html>

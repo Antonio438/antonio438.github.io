@@ -4,7 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // CONFIGURAÇÃO DO SERVIDOR - PASSO FINAL E OBRIGATÓRIO!
     // SUBSTITUA O URL ABAIXO PELO SEU URL PÚBLICO FORNECIDO PELO RENDER.COM
     // =================================================================================
-    const API_BASE_URL = 'https://seu-nome-de-servico.onrender.com'; 
+    const API_BASE_URL = 'https://antonio-licitacoes-api.onrender.com'; 
 
     // O resto do código usará a variável acima automaticamente.
     const PLAN_API_URL = `${API_BASE_URL}/api/plan`;
@@ -2288,3 +2288,4 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
     initializeDraggableCards();
 });
+

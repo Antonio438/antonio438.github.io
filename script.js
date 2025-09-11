@@ -296,8 +296,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const status = processInfo ? processInfo.fase : "Não Iniciado";
             
             const statusHtml = `<td class="editable-cell" data-id="${p.id}" data-field="status">
-                                <span class="process-status status-${status.replace(/ /g, '-')}">${status}</span>
-                              </td>`;
+                                    <span class="process-status status-${status.replace(/ /g, '-')}">${status}</span>
+                                  </td>`;
             
             const actionHtml = status !== "Não Iniciado" 
                 ? `<button class="btn" disabled style="padding: 0.2rem 0.8rem; font-size: 0.8rem;">Iniciado</button>` 
@@ -869,23 +869,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 const contentContainer = document.querySelector('.dashboard-content-container');
                 contentContainer.querySelector('.dashboard-tab-content.active').classList.remove('active');
                 contentContainer.querySelector(`.dashboard-tab-content[data-tab-id="${tabId}"]`).classList.add('active');
-            }
-        });
-    }
-
-    const reportTabsContainer = document.getElementById('report-tabs-nav');
-    if (reportTabsContainer) {
-        reportTabsContainer.addEventListener('click', (e) => {
-            const button = e.target.closest('.dashboard-tab-btn');
-            if (button) {
-                const tabId = button.dataset.tabId;
-                reportTabsContainer.querySelector('.dashboard-tab-btn.active').classList.remove('active');
-                button.classList.add('active');
-                
-                document.querySelectorAll('.report-tab-content').forEach(content => {
-                    content.classList.toggle('active', content.dataset.tabId === tabId);
-                });
-                document.getElementById('report-view-area').classList.add('hidden-field');
             }
         });
     }
@@ -1638,104 +1621,160 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =================================================================================
-    // REPORTS SECTION LOGIC
+    // REPORTS SECTION LOGIC (VERSÃO APRIMORADA)
     // =================================================================================
-    const reportViewArea = document.getElementById('report-view-area');
-    const reportViewContent = document.getElementById('report-view-content');
-    const reportViewTitle = document.getElementById('report-view-title');
-    const reportPdfButton = document.getElementById('report-pdf-btn');
-    const filterReportModal = document.getElementById('filterReportModal');
-    
-    function drawPdfHeader(doc) {
+
+    // --- Funções Auxiliares para Geração de PDF ---
+
+    /**
+     * Desenha o cabeçalho padrão em todas as páginas do PDF.
+     * @param {jsPDF} doc A instância do documento jsPDF.
+     * @param {object} data Contendo o título do relatório.
+     */
+    const drawPageHeader = (doc, data) => {
         const pageW = doc.internal.pageSize.getWidth();
         const margin = 15;
 
         if (logoImage) {
-            doc.addImage(logoImage, 'PNG', margin, 10, 20, 20);
+            doc.addImage(logoImage, 'PNG', margin, 10, 22, 22);
         }
         
-        doc.setFontSize(16);
+        doc.setFontSize(18);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor('#333333');
-        doc.text('Câmara Municipal de Embu-Guaçu', pageW / 2, 22, { align: 'center' });
+        doc.text('Câmara Municipal de Embu-Guaçu', pageW / 2, 20, { align: 'center' });
+        
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor('#6c757d');
+        doc.text(data.title, pageW / 2, 28, { align: 'center' });
+
+        doc.setLineWidth(0.5);
+        doc.setDrawColor('#dee2e6');
+        doc.line(margin, 38, pageW - margin, 38);
+    };
+
+    /**
+     * Adiciona números de página e data de geração no rodapé de todas as páginas.
+     * @param {jsPDF} doc A instância do documento jsPDF.
+     */
+    const addPageNumbers = (doc) => {
+        const pageCount = doc.internal.getNumberOfPages();
+        const pageW = doc.internal.pageSize.getWidth();
+        const margin = 15;
+
+        for (let i = 1; i <= pageCount; i++) {
+            doc.setPage(i);
+            doc.setFontSize(8);
+            doc.setTextColor('#adb5bd');
+            
+            const generationDate = `Gerado em: ${new Date().toLocaleString('pt-BR')}`;
+            doc.text(generationDate, margin, doc.internal.pageSize.getHeight() - 10);
+            
+            const pageText = `Página ${i} de ${pageCount}`;
+            doc.text(pageText, pageW - margin, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+        }
+    };
+
+    /**
+     * Desenha um card de KPI (Indicador-Chave de Desempenho) no PDF.
+     * @param {jsPDF} doc A instância do documento jsPDF.
+     * @param {object} options Opções de configuração do card.
+     */
+    const drawKpiCard = (doc, { x, y, w, h, title, value, subtitle = '', valueColor = '#212529', icon, iconBgColor = '#e9ecef' }) => {
+        doc.setFillColor('#ffffff');
+        doc.setDrawColor('#e9ecef');
+        doc.roundedRect(x, y, w, h, 3, 3, 'FD');
+        
+        doc.setFillColor(iconBgColor);
+        doc.roundedRect(x + 5, y + h/2 - 10, 20, 20, 3, 3, 'F');
+        doc.setFontSize(14);
+        doc.setTextColor('#ffffff');
+        const iconChar = icon.replace('fa-', '').charAt(0).toUpperCase();
+        doc.text(iconChar, x + 5 + 10, y + h/2 + 2, { align: 'center' });
+
+        const textX = x + 30;
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor('#6c757d');
+        doc.text(title.toUpperCase(), textX, y + 9);
+        
+        doc.setFontSize(18);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(valueColor);
+        doc.text(String(value), textX, y + 18);
+        
+        if (subtitle) {
+            doc.setFontSize(8);
+            doc.setFont('helvetica', 'normal');
+            doc.setTextColor('#6c757d');
+            doc.text(subtitle, textX, y + 23);
+        }
+    };
+
+    /**
+     * Renderiza um gráfico Chart.js em um canvas oculto e o adiciona ao PDF.
+     * @param {jsPDF} doc A instância do documento jsPDF.
+     * @param {object} chartConfig A configuração para o Chart.js.
+     * @returns {Promise<number>} A posição Y final após adicionar o gráfico.
+     */
+    const addChartToPdf = async (doc, { y, chartConfig, title }) => {
+        const margin = 15;
+        const pageW = doc.internal.pageSize.getWidth();
+        const chartW = (pageW / 2) - margin - 5;
+        const chartH = chartW * 0.75;
+
+        const tempContainer = document.createElement('div');
+        tempContainer.style.width = `${chartW * 4}px`;
+        tempContainer.style.height = `${chartH * 4}px`;
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.left = '-9999px';
+        const canvas = document.createElement('canvas');
+        tempContainer.appendChild(canvas);
+        document.body.appendChild(tempContainer);
+
+        const chart = new Chart(canvas, { ...chartConfig, options: { ...chartConfig.options, animation: false, responsive: true, maintainAspectRatio: true } });
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const imgData = canvas.toDataURL('image/png');
+        
         doc.setFontSize(12);
         doc.setFont('helvetica', 'bold');
-        doc.setTextColor('#4361ee');
-        doc.text('e-Licitações', pageW - margin, 22, { align: 'right' });
-        doc.setLineWidth(0.5);
-        doc.setDrawColor('#4361ee');
-        doc.line(margin, 35, pageW - margin, 35);
-        return 45;
-    }
+        doc.setTextColor('#343a40');
+        doc.text(title, margin, y);
+        y += 8;
 
-
-    function openReportFilterModal(reportType) {
-        const title = document.getElementById('filter-report-modal-title');
-        const generateBtn = document.getElementById('generate-report-with-filters-btn');
+        doc.addImage(imgData, 'PNG', margin, y, chartW, chartH);
         
-        document.querySelectorAll('#filterReportModal .form-group').forEach(el => el.style.display = 'none');
-        
-        if(reportType === 'unified-summary') {
-            title.textContent = 'Filtros para Relatório Gerencial';
-            document.getElementById('filter-group-month').style.display = 'block';
-            document.getElementById('filter-group-status').style.display = 'block';
-            document.getElementById('filter-group-priority').style.display = 'block';
-            document.getElementById('filter-group-type').style.display = 'block';
-        }
-        
-        generateBtn.dataset.reportType = reportType;
-        filterReportModal.classList.add('active');
-    }
+        chart.destroy();
+        document.body.removeChild(tempContainer);
 
-    document.getElementById('generate-report-with-filters-btn').addEventListener('click', () => {
-        const reportType = document.getElementById('generate-report-with-filters-btn').dataset.reportType;
-        const filters = {
-            month: document.getElementById('report-filter-month').value,
-            status: document.getElementById('report-filter-status').value,
-            priority: document.getElementById('report-filter-priority').value,
-            type: document.getElementById('report-filter-type').value
-        };
+        return y + chartH + 10;
+    };
 
+
+    // --- Funções Principais de Geração de Relatório ---
+
+    /**
+     * Gera o Relatório Gerencial Unificado em PDF com KPIs e gráficos.
+     * @param {object} filters Filtros selecionados pelo usuário.
+     */
+    async function generateUnifiedSummaryReport(filters) {
         showToast('Gerando relatório, por favor aguarde...');
 
-        if (reportType === 'unified-summary') {
-            generateUnifiedSummaryReport(filters);
-        }
-
-        filterReportModal.classList.remove('active');
-    });
-
-    document.querySelectorAll('[data-report-type]').forEach(button => {
-        button.addEventListener('click', () => {
-            const reportType = button.dataset.reportType;
-            openReportFilterModal(reportType);
-        });
-    });
-    
-    function generateUnifiedSummaryReport(filters) {
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
         const margin = 15;
         const pageW = doc.internal.pageSize.getWidth();
-        const pageH = doc.internal.pageSize.getHeight();
-        
-        let y = drawPdfHeader(doc);
+        let y = 45;
 
         const performanceData = processesData
             .filter(p => p.fase === 'Contratado' && p.purchasedValue && p.contractDate)
             .map(p => {
-                let estimatedValue = p.value;
-                if (p.planId) {
-                    const planItem = planData.find(item => item.id == p.planId);
-                    if (planItem) estimatedValue = planItem.value;
-                }
+                const planItem = p.planId ? planData.find(item => item.id == p.planId) : null;
+                const estimatedValue = planItem ? planItem.value : p.value;
                 const economy = parseFloat(estimatedValue || 0) - parseFloat(p.purchasedValue || 0);
-                const deadline = new Date(p.deadline + 'T12:00:00');
-                const contractDate = new Date(p.contractDate + 'T12:00:00');
-                const timeDiff = contractDate.getTime() - deadline.getTime();
-                const dayDiff = Math.ceil(timeDiff / (1000 * 3600 * 24));
-
-                return { ...p, estimatedValue, economy, dayDiff };
+                return { ...p, estimatedValue, economy };
             }).filter(p => {
                 const contractMonth = new Date(p.contractDate + 'T12:00:00').getMonth().toString();
                 const monthMatch = !filters.month || filters.month === contractMonth;
@@ -1743,403 +1782,269 @@ document.addEventListener('DOMContentLoaded', () => {
                 const priorityMatch = !filters.priority || p.priority === filters.priority;
                 return monthMatch && typeMatch && priorityMatch;
             });
-        
-        const totalExpectedValue = planData
-            .filter(p => {
-                const deadlineMonth = new Date(p.deadline + 'T12:00:00').getMonth().toString();
-                const monthMatch = !filters.month || filters.month === deadlineMonth;
-                const typeMatch = !filters.type || p.type === filters.type;
-                const priorityMatch = !filters.priority || p.priority === filters.priority;
-                return monthMatch && typeMatch && priorityMatch;
-            })
-            .reduce((sum, p) => sum + p.value, 0);
 
         const totalSavings = performanceData.reduce((s, p) => (p.economy > 0 ? s + p.economy : s), 0);
         const totalLoss = performanceData.reduce((s, p) => (p.economy < 0 ? s + Math.abs(p.economy) : s), 0);
         const netResult = totalSavings - totalLoss;
         const totalExecutedValue = performanceData.reduce((s, p) => s + parseFloat(p.purchasedValue), 0);
-        const onTimeProcesses = performanceData.filter(p => p.dayDiff <= 0);
-        const onTimeRate = performanceData.length > 0 ? (onTimeProcesses.length / performanceData.length) * 100 : 0;
 
-        doc.setFontSize(20); doc.setFont('helvetica', 'bold'); doc.setTextColor('#4361ee');
-        doc.text('Relatório Gerencial de Contratações', pageW / 2, y, { align: 'center' });
-        y += 7;
-
-        const monthNames = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
-        const appliedFilters = Object.entries(filters)
-            .filter(([, value]) => value !== '')
-            .map(([key, value]) => {
-                let fKey = {'month':'Mês', 'status':'Status', 'priority':'Prioridade', 'type':'Tipo'}[key] || key;
-                let fVal = value;
-                if (key === 'month' && value) fVal = monthNames[parseInt(value)];
-                return `${fKey}: ${fVal}`;
-            }).join(' | ');
-
-        doc.setFontSize(9); doc.setTextColor('#888888');
-        doc.text(`Filtros Aplicados: ${appliedFilters || 'Nenhum'}`, margin, y);
-        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageW - margin, y, { align: 'right' });
-        y += 10;
+        drawPageHeader(doc, { title: 'Relatório Gerencial de Contratações' });
         
-        const addFooter = () => {
-            const pageCount = doc.internal.getNumberOfPages();
-            for (let i = 1; i <= pageCount; i++) {
-                doc.setPage(i);
-                doc.setFontSize(8); doc.setTextColor(150);
-                doc.text(`Página ${i} de ${pageCount}`, pageW / 2, pageH - 10, { align: 'center' });
-            }
-        };
-        const drawSectionTitle = (title) => {
-            if (y > pageH - 40) { doc.addPage(); y = drawPdfHeader(doc) - 5; }
-            doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor('#3a56d4');
-            doc.text(title, margin, y);
-            y += 10;
-        };
-        const drawKpiCard = (x, y, w, h, title, value, subtitle = '', valueColor = '#212529') => {
-            doc.setFillColor(248, 249, 250); doc.setDrawColor(222, 226, 230);
-            doc.roundedRect(x, y, w, h, 3, 3, 'FD');
-            doc.setFontSize(9); doc.setFont('helvetica', 'bold'); doc.setTextColor('#6c757d');
-            doc.text(title.toUpperCase(), x + 5, y + 7);
-            doc.setFontSize(18); doc.setFont('helvetica', 'bold'); doc.setTextColor(valueColor);
-            doc.text(String(value), x + 5, y + 16);
-            if (subtitle) {
-                doc.setFontSize(8); doc.setFont('helvetica', 'normal'); doc.setTextColor('#6c757d');
-                doc.text(subtitle, x + 5, y + 21);
-            }
-        };
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor('#4361ee');
+        doc.text('Resumo Executivo', margin, y);
+        y += 10;
 
-        drawSectionTitle('Resumo Executivo');
         const cardW = (pageW - margin * 2 - 10) / 2;
-        const cardH = 25;
-        drawKpiCard(margin, y, cardW, cardH, 'Resultado Líquido', netResult.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}), `Economia de ${totalSavings.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}`, netResult >= 0 ? '#2a9d8f' : '#e63946');
-        drawKpiCard(margin + cardW + 10, y, cardW, cardH, 'Valor Total Executado', totalExecutedValue.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}), `${performanceData.length} processos contratados`);
-        y += cardH + 5;
-        drawKpiCard(margin, y, cardW, cardH, 'Valor Previsto no Plano', totalExpectedValue.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}), 'Soma dos itens do plano no período');
-        drawKpiCard(margin + cardW + 10, y, cardW, cardH, 'Processos no Prazo', `${onTimeRate.toFixed(1)}%`, `${onTimeProcesses.length} de ${performanceData.length} processos`, onTimeRate >= 80 ? '#2a9d8f' : '#e63946');
+        const cardH = 30;
+        
+        drawKpiCard(doc, { x: margin, y, w: cardW, h: cardH, title: 'Resultado Líquido', value: netResult.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}), subtitle: `Economia de ${totalSavings.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})}`, valueColor: netResult >= 0 ? '#2a9d8f' : '#e63946', icon: 'fa-piggy-bank', iconBgColor: netResult >= 0 ? '#2a9d8f' : '#e63946' });
+        drawKpiCard(doc, { x: margin + cardW + 10, y, w: cardW, h: cardH, title: 'Valor Total Executado', value: totalExecutedValue.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}), subtitle: `${performanceData.length} processos contratados`, icon: 'fa-check-double', iconBgColor: '#4361ee' });
         y += cardH + 10;
 
-        drawSectionTitle('Análise Financeira por Contratação');
-        
-        const savingsByContract = performanceData.filter(p => p.economy > 0).sort((a, b) => b.economy - a.economy);
-        if (savingsByContract.length > 0) {
-            doc.autoTable({
-                startY: y,
-                head: [['Economia por Contratação', 'Valor Economizado']],
-                body: savingsByContract.map(p => [`Nº ${p.processNumber}: ${p.object.substring(0, 50)}...`, p.economy.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})]),
-                theme: 'grid',
-                headStyles: { fillColor: '#2a9d8f' }
-            });
-            y = doc.autoTable.previous.finalY + 10;
+        if (performanceData.length > 0) {
+            doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor('#4361ee');
+            doc.text('Análise Visual', margin, y);
+            y += 10;
+
+            const modalityAnalysis = performanceData.reduce((acc, p) => {
+                const mod = p.modality || 'Não Definida';
+                acc[mod] = (acc[mod] || 0) + 1;
+                return acc;
+            }, {});
+
+            const typeAnalysis = performanceData.reduce((acc, p) => {
+                const type = p.type || 'Não Definido';
+                if (!acc[type]) acc[type] = { totalEstimated: 0, totalExecuted: 0 };
+                acc[type].totalEstimated += parseFloat(p.estimatedValue);
+                acc[type].totalExecuted += parseFloat(p.purchasedValue);
+                return acc;
+            }, {});
+
+            const modalityChartConfig = {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(modalityAnalysis),
+                    datasets: [{
+                        data: Object.values(modalityAnalysis),
+                        backgroundColor: CHART_COLORS,
+                        borderColor: '#ffffff',
+                        borderWidth: 2
+                    }]
+                },
+                options: { plugins: { legend: { position: 'right' } } }
+            };
+
+            const typeChartConfig = {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(typeAnalysis),
+                    datasets: [
+                        { label: 'Valor Estimado', data: Object.values(typeAnalysis).map(d => d.totalEstimated), backgroundColor: '#adb5bd' },
+                        { label: 'Valor Executado', data: Object.values(typeAnalysis).map(d => d.totalExecuted), backgroundColor: '#4361ee' }
+                    ]
+                },
+                options: { scales: { y: { beginAtZero: true } } }
+            };
+            
+            const chartYStart = y;
+            await addChartToPdf(doc, { y: chartYStart, chartConfig: modalityChartConfig, title: 'Contratos por Modalidade' });
+            doc.addImage(await getChartImage(typeChartConfig, (pageW / 2) - margin - 5), 'PNG', pageW/2 + 5, chartYStart + 8, (pageW / 2) - margin - 5, ((pageW / 2) - margin - 5) * 0.75);
+            doc.text('Estimado vs. Executado por Tipo', pageW/2 + 5, chartYStart);
+            y = chartYStart + (((pageW / 2) - margin - 5) * 0.75) + 20;
         }
 
-        const lossesByContract = performanceData.filter(p => p.economy < 0).sort((a, b) => a.economy - b.economy);
-        if (lossesByContract.length > 0) {
-            doc.autoTable({
-                startY: y,
-                head: [['Prejuízo por Contratação (Valor Acima do Estimado)', 'Valor do Prejuízo']],
-                body: lossesByContract.map(p => [`Nº ${p.processNumber}: ${p.object.substring(0, 50)}...`, Math.abs(p.economy).toLocaleString('pt-BR', {style:'currency', currency:'BRL'})]),
-                theme: 'grid',
-                headStyles: { fillColor: '#e63946' }
-            });
-            y = doc.autoTable.previous.finalY + 10;
-        }
+        doc.addPage();
+        y = 45;
+        drawPageHeader(doc, { title: 'Relatório Gerencial de Contratações' });
+        doc.setFontSize(14); doc.setFont('helvetica', 'bold'); doc.setTextColor('#4361ee');
+        doc.text('Detalhamento Financeiro', margin, y);
+        y += 10;
         
-        drawSectionTitle('Análise Operacional Detalhada');
-
-        const modalityAnalysis = performanceData.reduce((acc, p) => {
-            const mod = p.modality || 'Não Definida';
-            if (!acc[mod]) acc[mod] = { count: 0, totalValue: 0, totalEconomy: 0 };
-            acc[mod].count++;
-            acc[mod].totalValue += parseFloat(p.purchasedValue);
-            acc[mod].totalEconomy += p.economy;
-            return acc;
-        }, {});
-
         doc.autoTable({
             startY: y,
-            head: [['Análise por Modalidade', 'Nº Contratos', 'Valor Total', 'Economia Total']],
-            body: Object.entries(modalityAnalysis).map(([mod, data]) => [
-                mod,
-                data.count,
-                data.totalValue.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}),
-                data.totalEconomy.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})
+            head: [['Nº Processo', 'Objeto', 'Valor Estimado', 'Valor Final', 'Economia']],
+            body: performanceData.map(p => [
+                p.processNumber,
+                p.object.substring(0, 40) + (p.object.length > 40 ? '...' : ''),
+                parseFloat(p.estimatedValue).toLocaleString('pt-BR', {style:'currency', currency:'BRL'}),
+                parseFloat(p.purchasedValue).toLocaleString('pt-BR', {style:'currency', currency:'BRL'}),
+                p.economy.toLocaleString('pt-BR', {style:'currency', currency:'BRL'})
             ]),
             theme: 'striped',
-            headStyles: { fillColor: '#4361ee' }
-        });
-        y = doc.autoTable.previous.finalY + 10;
-        
-        const priorityAnalysis = performanceData.reduce((acc, p) => {
-            const prio = p.priority || 'Não Definida';
-            if (!acc[prio]) acc[prio] = { count: 0, totalValue: 0, totalEconomy: 0 };
-            acc[prio].count++;
-            acc[prio].totalValue += parseFloat(p.purchasedValue);
-            acc[prio].totalEconomy += p.economy;
-            return acc;
-        }, {});
-
-        const priorityOrder = ['Alta', 'Média', 'Baixa', 'Não Definida'];
-        const sortedPriorityData = Object.entries(priorityAnalysis).sort(([a], [b]) => {
-            return priorityOrder.indexOf(a) - priorityOrder.indexOf(b);
+            headStyles: { fillColor: '#4361ee' },
+            didParseCell: function(data) {
+                if (data.column.dataKey === 4) {
+                    const value = parseFloat(data.cell.raw.toString().replace(/[^0-9,-]+/g,"").replace(',', '.'));
+                    if (value > 0) data.cell.styles.textColor = '#2a9d8f';
+                    if (value < 0) data.cell.styles.textColor = '#e63946';
+                }
+            }
         });
 
-        doc.autoTable({
-            startY: y,
-            head: [['Análise por Prioridade', 'Nº Contratos', 'Valor Total Contratado', 'Economia Média']],
-            body: sortedPriorityData.map(([prio, data]) => [
-                prio,
-                data.count,
-                data.totalValue.toLocaleString('pt-BR', {style:'currency', currency:'BRL'}),
-                (data.count > 0 ? (data.totalEconomy / data.count) : 0).toLocaleString('pt-BR', {style:'currency', currency:'BRL'})
-            ]),
-            theme: 'striped',
-            headStyles: { fillColor: '#4361ee' }
-        });
-        
-        addFooter();
+        addPageNumbers(doc);
         doc.save(`Relatorio_Gerencial_${new Date().toISOString().slice(0,10)}.pdf`);
+        showToast('Relatório gerado com sucesso!');
     }
 
-    async function generateRichProcessPdf(processId) {
-        const process = processesData.find(p => p.id == processId);
-        if (!process) {
-            showToast('Erro: Processo não encontrado.');
-            return;
-        }
 
+    /**
+     * Gera um PDF detalhado para um processo específico.
+     * @param {string} processId O ID do processo.
+     */
+    async function generateProcessDetailPdf(processId) {
+        const process = processesData.find(p => p.id == processId);
+        if (!process) return showToast('Erro: Processo não encontrado.');
+        
         showToast(`Gerando PDF para o processo Nº ${process.processNumber || 'S/N'}...`);
 
         const { jsPDF } = window.jspdf;
         const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
-        
-        const pageW = doc.internal.pageSize.getWidth();
         const margin = 15;
+        const pageW = doc.internal.pageSize.getWidth();
+        let y = 45;
+
+        drawPageHeader(doc, { title: `Acompanhamento do Processo Nº: ${process.processNumber || 'S/N'}` });
         
-        let y = drawPdfHeader(doc);
+        const planItem = process.planId ? planData.find(item => item.id == process.planId) : null;
+        const estimatedValue = planItem ? planItem.value : process.value;
+        const economy = (process.purchasedValue && estimatedValue) ? (parseFloat(estimatedValue) - parseFloat(process.purchasedValue)) : null;
+
+        const details = [
+            { label: 'Objeto', value: process.object, span: 2 },
+            { label: 'Status Atual', value: process.fase },
+            { label: 'Localização', value: `${process.location.sector} (${process.location.responsible || '-'})` },
+            { label: 'Valor Estimado', value: parseFloat(estimatedValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) },
+            { label: 'Valor Contratado', value: process.purchasedValue ? parseFloat(process.purchasedValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A' },
+            { label: 'Economia', value: economy !== null ? economy.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A' },
+            { label: 'Prazo Limite', value: process.deadline ? new Date(process.deadline + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A' }
+        ];
         
-        doc.setFontSize(11); doc.setFont('helvetica', 'normal'); doc.setTextColor('#333333');
-        doc.text(`Acompanhamento do Processo Nº: ${process.processNumber || 'S/N'}`, margin, y);
-        doc.setFontSize(9); doc.setTextColor('#888888');
-        doc.text(`Gerado em: ${new Date().toLocaleString('pt-BR')}`, pageW - margin, y, { align: 'right' });
+        doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor('#343a40');
+        doc.text('Informações Gerais', margin, y);
+        y += 6;
+        doc.setLineWidth(0.2); doc.setDrawColor('#dee2e6');
+        doc.line(margin, y, pageW - margin, y);
         y += 8;
 
-        doc.setFontSize(10); doc.setTextColor('#333333'); doc.setFont('helvetica', 'bold');
-        doc.text('Objeto:', margin, y);
-        doc.setFont('helvetica', 'normal');
-        const objectLines = doc.splitTextToSize(process.object, pageW - (margin * 2) - 15);
-        doc.text(objectLines, margin + 15, y);
-        y += (objectLines.length * 4) + 8;
-
-        const drawPdfSectionTitle = (doc, y, title, margin) => {
-            doc.setFontSize(12); doc.setFont('helvetica', 'bold'); doc.setTextColor('#3a56d4');
-            doc.text(title, margin, y);
-            return y + 8;
-        };
-
-        y = drawPdfSectionTitle(doc, y, 'Detalhes Gerais', margin);
-        
-        let estimatedValue = process.value;
-        if (process.planId) {
-            const planItem = planData.find(item => item.id == process.planId);
-            if (planItem) estimatedValue = planItem.value;
-        }
-        const economy = (process.purchasedValue && estimatedValue) ? (parseFloat(estimatedValue) - parseFloat(process.purchasedValue)) : null;
-        
-        const details = {
-            'Status Atual': process.fase, 'Prioridade': process.priority, 'Tipo': process.type,
-            'Modalidade': process.modality || 'A definir',
-            'Valor Estimado': parseFloat(estimatedValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-            'Valor Contratado': process.purchasedValue ? parseFloat(process.purchasedValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A',
-            'Economia': economy !== null ? economy.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A',
-            'Prazo Limite': process.deadline ? new Date(process.deadline + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A',
-            'Data da Contratação': process.contractDate ? new Date(process.contractDate + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A',
-            'Localização': `${process.location.sector} ${process.location.responsible ? `(${process.location.responsible})` : ''}`,
-            'Vinculado ao Plano': process.planId ? `Sim (Item ${process.planId})` : 'Não'
-        };
-        
-        const colWidth = (pageW - margin * 2) / 3;
-        const detailEntries = Object.entries(details);
-        
-        detailEntries.forEach(([label, value], i) => {
-            const col = i % 3;
-            if (col === 0 && i > 0) y += 15;
-            const x = margin + (col * colWidth);
+        const colWidth = (pageW - margin * 2) / 2;
+        let currentX = margin;
+        details.forEach(detail => {
+            const itemWidth = detail.span ? pageW - margin * 2 : colWidth - 5;
+            const textLines = doc.splitTextToSize(String(detail.value), itemWidth);
             
             doc.setFontSize(8); doc.setFont('helvetica', 'bold'); doc.setTextColor('#6c757d');
-            doc.text(label.toUpperCase(), x, y);
-            doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor('#333333');
-            doc.text(String(value), x, y + 5);
-        });
-        y += 20;
-
-        const phaseHead = [['Fase', 'Início', 'Fim', 'Duração']];
-        const phaseBody = (process.history || []).map(entry => {
-            if (entry.fase === 'Contratado') {
-                return [
-                    entry.fase,
-                    new Date(entry.startDate).toLocaleDateString('pt-BR', {timeZone: 'UTC'}),
-                    '-',
-                    '-'
-                ];
+            doc.text(detail.label.toUpperCase(), currentX, y);
+            
+            doc.setFontSize(10); doc.setFont('helvetica', 'normal'); doc.setTextColor('#212529');
+            doc.text(textLines, currentX, y + 5);
+            
+            if (detail.span) {
+                y += (textLines.length * 5) + 8;
             } else {
-                return [
-                    entry.fase,
-                    new Date(entry.startDate).toLocaleString('pt-BR'),
-                    entry.endDate ? new Date(entry.endDate).toLocaleString('pt-BR') : 'Fase Atual',
-                    formatDuration(entry.startDate, entry.endDate)
-                ];
+                currentX += colWidth;
+                if (currentX >= pageW - margin) {
+                    currentX = margin;
+                    y += (textLines.length * 5) + 8;
+                }
             }
         });
-        y = drawPdfSectionTitle(doc, y, 'Histórico de Fases', margin);
-        doc.autoTable({ head: phaseHead, body: phaseBody, startY: y, headStyles: { fillColor: '#4361ee' } });
-        y = doc.autoTable.previous.finalY + 10;
+        y += 10;
 
-        const locationHead = [['Setor', 'Responsável', 'Início', 'Fim', 'Duração']];
-        const locationBody = (process.locationHistory || []).map(entry => [ entry.sector || 'N/A', entry.responsible || '-', new Date(entry.startDate).toLocaleString('pt-BR'), entry.endDate ? new Date(entry.endDate).toLocaleString('pt-BR') : 'Local Atual', formatDuration(entry.startDate, entry.endDate) ]);
-        y = drawPdfSectionTitle(doc, y, 'Histórico de Localizações', margin);
-        doc.autoTable({ head: locationHead, body: locationBody, startY: y, headStyles: { fillColor: '#4361ee' } });
-        y = doc.autoTable.previous.finalY + 10;
+        const tableConfig = { theme: 'grid', headStyles: { fillColor: '#495057' } };
         
+        y = doc.autoTable.previous ? doc.autoTable.previous.finalY + 10 : y;
+        if(process.history && process.history.length > 0) {
+            doc.autoTable({ startY: y, head: [['Histórico de Fases', 'Início', 'Fim', 'Duração']], body: process.history.map(e => [e.fase, new Date(e.startDate).toLocaleString('pt-BR'), e.endDate ? new Date(e.endDate).toLocaleString('pt-BR') : 'Atual', formatDuration(e.startDate, e.endDate)]), ...tableConfig });
+            y = doc.autoTable.previous.finalY;
+        }
+
+        y = doc.autoTable.previous ? doc.autoTable.previous.finalY + 10 : y;
+        if(process.locationHistory && process.locationHistory.length > 0) {
+            doc.autoTable({ startY: y, head: [['Histórico de Localizações', 'Responsável', 'Início', 'Fim', 'Duração']], body: process.locationHistory.map(e => [e.sector, e.responsible || '-', new Date(e.startDate).toLocaleString('pt-BR'), e.endDate ? new Date(e.endDate).toLocaleString('pt-BR') : 'Atual', formatDuration(e.startDate, e.endDate)]), ...tableConfig });
+        }
+
+        addPageNumbers(doc);
         doc.save(`Acompanhamento_Processo_${process.processNumber || process.id}.pdf`);
     }
 
-    function generateProcessTrackingReport(processId) {
-        if (!processId) {
-            reportViewArea.classList.add('hidden-field');
-            return;
-        }
-    
-        const process = processesData.find(p => p.id == processId);
-        if (!process) {
-            showToast('Processo não encontrado.');
-            reportViewArea.classList.add('hidden-field');
-            return;
-        }
-    
-        const reportTitle = `Acompanhamento do Processo Nº ${process.processNumber || 'S/N'}`;
-        const reportContainer = document.createElement('div');
-
-        let estimatedValue = process.value;
-        if (process.planId) {
-            const planItem = planData.find(item => item.id == process.planId);
-            if (planItem) estimatedValue = planItem.value;
-        }
-
-        const summaryDetails = {
-            'Objeto': process.object,
-            'Fase Atual': `<span class="process-status status-${process.fase.replace(/ /g, '-')}">${process.fase}</span>`,
-            'Valor Estimado': parseFloat(estimatedValue || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
-            'Valor Final': process.purchasedValue ? parseFloat(process.purchasedValue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : 'N/A',
-            'Localização Atual': `${process.location.sector} ${process.location.responsible ? `(${process.location.responsible})` : ''}`.trim(),
-            'Prazo Final': process.deadline ? new Date(process.deadline + 'T00:00:00').toLocaleDateString('pt-BR') : 'N/A'
-        };
-        
-        reportContainer.innerHTML = `<div class="info-grid">${Object.entries(summaryDetails).map(([label, value]) => `
-            <div class="info-item">
-                <span class="info-label">${label}</span>
-                <span class="info-value">${value}</span>
-            </div>`).join('')}
-        </div>`;
-        
-        const phaseHistoryContainer = document.createElement('div');
-        phaseHistoryContainer.className = 'processes-table-container';
-        phaseHistoryContainer.innerHTML = `
-            <h4 class="tracking-table-title">Histórico de Fases</h4>
-            <table class="processes-table">
-                <thead><tr><th>Fase</th><th>Data de Início</th><th>Data de Fim</th><th>Duração</th></tr></thead>
-                <tbody>
-                    ${(process.history && process.history.length > 0) ? process.history.map(entry => `
-                        <tr>
-                            <td><span class="process-status status-${entry.fase.replace(/ /g, '-')}">${entry.fase}</span></td>
-                            <td>${new Date(entry.startDate).toLocaleString('pt-BR')}</td>
-                            <td>${entry.endDate ? new Date(entry.endDate).toLocaleString('pt-BR') : 'Fase Atual'}</td>
-                            <td>${formatDuration(entry.startDate, entry.endDate)}</td>
-                        </tr>`).join('') : '<tr><td colspan="4">Nenhum histórico de fase.</td></tr>'}
-                </tbody>
-            </table>`;
-    
-        const locationHistoryContainer = document.createElement('div');
-        locationHistoryContainer.className = 'processes-table-container';
-        locationHistoryContainer.style.marginTop = '1.5rem';
-        locationHistoryContainer.innerHTML = `
-            <h4 class="tracking-table-title">Histórico de Localizações</h4>
-            <table class="processes-table">
-                <thead><tr><th>Setor</th><th>Responsável</th><th>Data de Início</th><th>Data de Fim</th><th>Duração</th></tr></thead>
-                <tbody>
-                    ${(process.locationHistory && process.locationHistory.length > 0) ? process.locationHistory.map(entry => `
-                        <tr>
-                            <td>${entry.sector || 'N/A'}</td>
-                            <td>${entry.responsible || '-'}</td>
-                            <td>${new Date(entry.startDate).toLocaleString('pt-BR')}</td>
-                            <td>${entry.endDate ? new Date(entry.endDate).toLocaleString('pt-BR') : 'Local Atual'}</td>
-                            <td>${formatDuration(entry.startDate, entry.endDate)}</td>
-                        </tr>`).join('') : '<tr><td colspan="5">Nenhum histórico de localização.</td></tr>'}
-                </tbody>
-            </table>`;
-        
-        reportContainer.appendChild(phaseHistoryContainer);
-        reportContainer.appendChild(locationHistoryContainer);
-        
-        reportViewContent.innerHTML = '';
-        reportViewContent.appendChild(reportContainer);
-        reportViewTitle.textContent = reportTitle;
-        
-        reportPdfButton.dataset.processId = process.id;
-        
-        reportViewArea.classList.remove('hidden-field');
-        reportViewArea.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    function openReportFilterModal(reportType) {
+        const modal = document.getElementById('filterReportModal');
+        modal.dataset.reportType = reportType;
+        modal.classList.add('active');
     }
+
+    document.getElementById('generate-report-with-filters-btn').addEventListener('click', () => {
+        const modal = document.getElementById('filterReportModal');
+        const reportType = modal.dataset.reportType;
         
+        if (reportType === 'unified-summary') {
+            const filters = {
+                month: document.getElementById('report-filter-month').value,
+                type: document.getElementById('report-filter-type').value,
+                priority: document.getElementById('report-filter-priority').value,
+            };
+            generateUnifiedSummaryReport(filters);
+        }
+        modal.classList.remove('active');
+    });
+
+    document.querySelectorAll('[data-action="open-report-modal"]').forEach(button => {
+        button.addEventListener('click', () => {
+            const reportType = button.dataset.reportType;
+            openReportFilterModal(reportType);
+        });
+    });
+
     function renderReportsTab() {
         const searchInput = document.getElementById('report-process-search');
         const searchList = document.getElementById('report-process-list');
         
         const sortedProcesses = [...processesData].sort((a, b) => 
-            (a.processNumber || "").localeCompare(b.processNumber || "", undefined, {numeric: true})
+            (a.processNumber || "").localeCompare(b.processNumber || "", undefined, { numeric: true })
         );
-    
-        searchInput.addEventListener('input', () => {
+
+        const updateList = () => {
             const searchTerm = searchInput.value.toLowerCase();
             if (!searchTerm) {
                 searchList.innerHTML = '';
                 searchList.classList.remove('active');
                 return;
             }
-    
+
             const filtered = sortedProcesses.filter(p => 
                 p.processNumber?.toLowerCase().includes(searchTerm) || p.object.toLowerCase().includes(searchTerm)
             );
-    
+            
             searchList.innerHTML = '';
             if (filtered.length > 0) {
-                filtered.forEach(p => {
+                filtered.slice(0, 10).forEach(p => {
                     const item = document.createElement('div');
                     item.className = 'searchable-select-item';
                     item.dataset.id = p.id;
                     item.innerHTML = `<strong>Nº ${p.processNumber || 'S/N'}</strong> <small>${p.object}</small>`;
+                    item.addEventListener('click', () => {
+                        generateProcessDetailPdf(p.id);
+                        searchInput.value = `Nº ${p.processNumber || 'S/N'}: ${p.object}`;
+                        searchList.classList.remove('active');
+                    });
                     searchList.appendChild(item);
                 });
                 searchList.classList.add('active');
             } else {
                 searchList.classList.remove('active');
             }
-        });
-    
-        searchList.addEventListener('click', (e) => {
-            const item = e.target.closest('.searchable-select-item');
-            if (item) {
-                generateProcessTrackingReport(item.dataset.id);
-                searchInput.value = '';
-                searchList.classList.remove('active');
-            }
-        });
-    
+        };
+        
+        searchInput.addEventListener('input', updateList);
+        searchInput.addEventListener('focus', updateList);
+        
         document.addEventListener('click', (e) => {
             if (!e.target.closest('.searchable-select-container')) {
                 searchList.classList.remove('active');
             }
         });
     }
-    
+
     function formatDuration(start, end) {
         if (!start) return 'N/A';
         const startDate = new Date(start);
@@ -2155,15 +2060,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if (minutes > 0) result += `${minutes}m`;
         return result.trim() || 'Menos de 1 min';
     }
-    
-    reportPdfButton.addEventListener('click', () => {
-        const processId = reportPdfButton.dataset.processId;
-        if (processId) {
-            generateRichProcessPdf(processId);
-        } else {
-            showToast('Nenhum processo selecionado para gerar PDF.');
-        }
-    });
+
+    async function getChartImage(chartConfig, width) {
+        const tempContainer = document.createElement('div');
+        tempContainer.style.width = `${width * 4}px`;
+        tempContainer.style.height = `${width * 0.75 * 4}px`;
+        tempContainer.style.position = 'absolute';
+        tempContainer.style.left = '-9999px';
+        const canvas = document.createElement('canvas');
+        tempContainer.appendChild(canvas);
+        document.body.appendChild(tempContainer);
+        
+        const chart = new Chart(canvas, { ...chartConfig, options: { ...chartConfig.options, animation: false, responsive: true, maintainAspectRatio: true } });
+        
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const imgData = canvas.toDataURL('image/png');
+        
+        chart.destroy();
+        document.body.removeChild(tempContainer);
+        return imgData;
+    }
 
     // =================================================================================
     // UTILITIES
@@ -2288,4 +2204,3 @@ document.addEventListener('DOMContentLoaded', () => {
     initializeApp();
     initializeDraggableCards();
 });
-

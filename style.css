@@ -1641,3 +1641,84 @@ textarea.form-control {
         grid-template-columns: 1fr;
     }
 }
+
+/* ==========================================================================
+   10. ESTILOS DA SEÇÃO DE RELATÓRIOS (APRIMORADO)
+   ========================================================================== */
+
+.reports-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 1.5rem;
+}
+
+.report-card-selector {
+    background-color: var(--card-bg);
+    border: 1px solid var(--card-border);
+    border-radius: var(--radius-lg);
+    padding: 2rem;
+    box-shadow: var(--shadow-sm);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+    transition: var(--transition);
+}
+
+.report-card-selector:hover {
+    transform: translateY(-5px);
+    box-shadow: var(--shadow-md);
+    border-color: var(--primary);
+}
+
+.report-card-selector.placeholder {
+    opacity: 0.6;
+}
+.report-card-selector.placeholder:hover {
+    transform: none;
+    box-shadow: var(--shadow-sm);
+    border-color: var(--card-border);
+}
+
+.report-card-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background-color: var(--primary);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.8rem;
+    margin-bottom: 1rem;
+}
+
+.report-card-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.report-card-description {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    flex-grow: 1;
+}
+
+.report-card-selector .searchable-select-container,
+.report-card-selector .btn {
+    width: 100%;
+}
+
+.report-card-selector .btn {
+    justify-content: center;
+}
+
+/* Modal de Filtros de Relatório */
+#filterReportModal .modal-body-simple {
+    padding-top: 1rem;
+}
+#filterReportModal .form-group {
+    display: block !important; /* Garante que os filtros sejam visíveis */
+}
